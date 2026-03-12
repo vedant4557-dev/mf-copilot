@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+build/
+
+# Environment — NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Database
+*.db
+*.sqlite
+
+# Uploads
+uploads/
+tmp/
+
+# SSL certificates — generate separately
+infra/ssl/*.pem
+infra/ssl/*.key
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Prisma generated
+apps/api/node_modules/.prisma/
+
+# Docker volumes (local)
+pgdata/
+redisdata/

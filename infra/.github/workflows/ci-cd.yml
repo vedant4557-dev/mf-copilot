@@ -1,0 +1,198 @@
+name: CI/CD — MF Copilot
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION:      ap-south-1
+  ECR_REGISTRY:    ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+  ECS_CLUSTER:     mf-copilot-prod
+  ECS_SERVICE_API: mf-copilot-api
+  NODE_VERSION:    "20"
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  lint-and-type-check:
+  # ─────────────────────────────────────────────────────────────
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo lint
+      - run: pnpm turbo typecheck
+
+  # ─────────────────────────────────────────────────────────────
+  test:
+  # ─────────────────────────────────────────────────────────────
+    runs-on: ubuntu-latest
+    needs: lint-and-type-check
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB:       mfcopilot_test
+          POSTGRES_USER:     test
+          POSTGRES_PASSWORD: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mfcopilot_test
+      REDIS_URL:    redis://localhost:6379
+      JWT_SECRET:   test_secret_32_characters_minimum
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter=@mf-copilot/analytics --filter=@mf-copilot/ai
+      - run: pnpm turbo test --filter=apps/api --filter=packages/...
+
+  # ─────────────────────────────────────────────────────────────
+  build-and-push:
+  # ─────────────────────────────────────────────────────────────
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    outputs:
+      api-image:    ${{ steps.meta-api.outputs.tags }}
+      parser-image: ${{ steps.meta-parser.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker meta — API
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/mf-copilot-api
+          tags:   type=sha,prefix=sha-
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context:   apps/api
+          push:      true
+          tags:      ${{ steps.meta-api.outputs.tags }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Docker meta — CAS Parser
+        id: meta-parser
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/mf-copilot-cas-parser
+          tags:   type=sha,prefix=sha-
+
+      - name: Build and push CAS parser image
+        uses: docker/build-push-action@v5
+        with:
+          context:   services/cas-parser
+          push:      true
+          tags:      ${{ steps.meta-parser.outputs.tags }}
+
+  # ─────────────────────────────────────────────────────────────
+  deploy-api:
+  # ─────────────────────────────────────────────────────────────
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Download ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition mf-copilot-api \
+            --query taskDefinition > task-definition.json
+
+      - name: Update ECS task definition with new image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name:  mf-copilot-api
+          image:           ${{ needs.build-and-push.outputs.api-image }}
+
+      - name: Deploy to ECS (rolling update)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition:  ${{ steps.task-def.outputs.task-definition }}
+          service:          ${{ env.ECS_SERVICE_API }}
+          cluster:          ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Create Sentry release
+        uses: getsentry/action-release@v1
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG:        mf-copilot
+          SENTRY_PROJECT:    api
+        with:
+          environment: production
+
+  # ─────────────────────────────────────────────────────────────
+  deploy-web:
+  # ─────────────────────────────────────────────────────────────
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token:   ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id:  ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args:    "--prod"
+          working-directory: apps/web

@@ -1,0 +1,259 @@
+// apps/api/prisma/schema.prisma
+// Prisma ORM schema — mirrors infra/schema.sql
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Users {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  name           String
+  panEncrypted   Bytes?    @map("pan_encrypted")
+  phoneEncrypted Bytes?    @map("phone_encrypted")
+  plan           String    @default("free")
+  kycStatus      String    @default("pending") @map("kyc_status")
+  riskProfile    String?   @default("moderate") @map("risk_profile")
+  avatar         String?
+  referralCode   String?   @unique @map("referral_code")
+  referredById   String?   @map("referred_by") @db.Uuid
+  planExpiresAt  DateTime? @map("plan_expires_at")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  referredBy     Users?    @relation("Referrals", fields: [referredById], references: [id])
+  referrals      Users[]   @relation("Referrals")
+  portfolios     Portfolios[]
+  subscriptions  Subscriptions[]
+  auditLogs      AuditLog[]
+  kycDocuments   KycDocuments[]
+
+  @@map("users")
+}
+
+model KycDocuments {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  docType      String    @map("doc_type")
+  status       String    @default("pending")
+  verifiedAt   DateTime? @map("verified_at")
+  digilockerId String?   @map("digilocker_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user         Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kyc_documents")
+}
+
+model Funds {
+  isin          String    @id
+  amfiCode      Int?      @unique @map("amfi_code")
+  name          String
+  amc           String
+  category      String
+  subCategory   String?   @map("sub_category")
+  benchIndex    String?   @map("bench_index")
+  riskOMeter    String?   @map("risk_o_meter")
+  expenseRatio  Decimal?  @map("expense_ratio") @db.Decimal(5, 3)
+  aumCr         Decimal?  @map("aum_cr") @db.Decimal(12, 2)
+  managerName   String?   @map("manager_name")
+  fundType      String    @default("open") @map("fund_type")
+  launchDate    DateTime? @map("launch_date") @db.Date
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  navHistory       NavHistory[]
+  fundHoldings     FundHoldings[]
+  portfolioHoldings PortfolioHoldings[]
+  corporateActions CorporateActions[]
+
+  @@map("funds")
+}
+
+model NavHistory {
+  fundIsin  String   @map("fund_isin")
+  navDate   DateTime @map("nav_date") @db.Date
+  nav       Decimal  @db.Decimal(12, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  fund      Funds    @relation(fields: [fundIsin], references: [isin])
+
+  @@id([fundIsin, navDate], name: "fund_isin_nav_date")
+  @@index([fundIsin, navDate(sort: Desc)])
+  @@map("nav_history")
+}
+
+model FundHoldings {
+  id        BigInt   @id @default(autoincrement())
+  fundIsin  String   @map("fund_isin")
+  asOfDate  DateTime @map("as_of_date") @db.Date
+  stockName String   @map("stock_name")
+  stockIsin String?  @map("stock_isin")
+  sector    String?
+  marketCap String?  @map("market_cap")
+  weightPct Decimal  @map("weight_pct") @db.Decimal(6, 3)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  fund      Funds    @relation(fields: [fundIsin], references: [isin])
+
+  @@unique([fundIsin, asOfDate, stockIsin])
+  @@index([fundIsin, asOfDate(sort: Desc)])
+  @@map("fund_holdings")
+}
+
+model Portfolios {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  name          String    @default("My Portfolio")
+  goal          String?
+  targetAmount  Decimal?  @map("target_amount") @db.Decimal(15, 2)
+  targetDate    DateTime? @map("target_date") @db.Date
+  isPrimary     Boolean   @default(false) @map("is_primary")
+  casImported   Boolean   @default(false) @map("cas_imported")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user              Users               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioHoldings PortfolioHoldings[]
+  analyticsResults  AnalyticsResults[]
+
+  @@map("portfolios")
+}
+
+model PortfolioHoldings {
+  id              String    @id @default(uuid()) @db.Uuid
+  portfolioId     String    @map("portfolio_id") @db.Uuid
+  fundIsin        String    @map("fund_isin")
+  folioNumber     String?   @map("folio_number")
+  units           Decimal   @db.Decimal(16, 4)
+  avgBuyNav       Decimal?  @map("avg_buy_nav") @db.Decimal(12, 4)
+  investedAmount  Decimal?  @map("invested_amount") @db.Decimal(15, 2)
+  sipAmount       Decimal?  @default(0) @map("sip_amount") @db.Decimal(10, 2)
+  goalTag         String?   @map("goal_tag")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  portfolio            Portfolios             @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  fund                 Funds                  @relation(fields: [fundIsin], references: [isin])
+  portfolioTransactions PortfolioTransactions[]
+
+  @@unique([portfolioId, fundIsin, folioNumber], name: "portfolio_id_fund_isin_folio_number")
+  @@map("portfolio_holdings")
+}
+
+model PortfolioTransactions {
+  id          String    @id @default(uuid()) @db.Uuid
+  holdingId   String    @map("holding_id") @db.Uuid
+  portfolioId String    @map("portfolio_id") @db.Uuid
+  fundIsin    String    @map("fund_isin")
+  txnDate     DateTime  @map("txn_date") @db.Date
+  txnType     String    @map("txn_type")
+  units       Decimal?  @db.Decimal(16, 4)
+  nav         Decimal?  @db.Decimal(12, 4)
+  amount      Decimal?  @db.Decimal(15, 2)
+  note        String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  holding     PortfolioHoldings @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@index([holdingId])
+  @@index([txnDate(sort: Desc)])
+  @@map("portfolio_transactions")
+}
+
+model AnalyticsResults {
+  id             String    @id @default(uuid()) @db.Uuid
+  portfolioId    String    @map("portfolio_id") @db.Uuid
+  computedAt     DateTime  @default(now()) @map("computed_at")
+  totalValue     Decimal?  @map("total_value") @db.Decimal(15, 2)
+  totalInvested  Decimal?  @map("total_invested") @db.Decimal(15, 2)
+  pnl            Decimal?  @db.Decimal(15, 2)
+  pnlPct         Decimal?  @map("pnl_pct") @db.Decimal(8, 4)
+  xirr           Decimal?  @db.Decimal(8, 4)
+  sharpe         Decimal?  @db.Decimal(8, 4)
+  sortino        Decimal?  @db.Decimal(8, 4)
+  maxDrawdown    Decimal?  @map("max_drawdown") @db.Decimal(8, 4)
+  beta           Decimal?  @db.Decimal(8, 4)
+  healthScore    Int?      @map("health_score")
+  diversityScore Int?      @map("diversity_score")
+  sectorExposure Json?     @map("sector_exposure")
+  overlapMatrix  Json?     @map("overlap_matrix")
+
+  portfolio      Portfolios @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@map("analytics_results")
+}
+
+model CorporateActions {
+  id          String    @id @default(uuid()) @db.Uuid
+  fundIsin    String    @map("fund_isin")
+  actionType  String    @map("action_type")
+  exDate      DateTime  @map("ex_date") @db.Date
+  recordDate  DateTime? @map("record_date") @db.Date
+  ratio       Decimal?  @db.Decimal(10, 4)
+  amount      Decimal?  @db.Decimal(10, 4)
+  mergedInto  String?   @map("merged_into")
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  fund        Funds     @relation(fields: [fundIsin], references: [isin])
+
+  @@map("corporate_actions")
+}
+
+model Subscriptions {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  razorpaySubId   String?   @unique @map("razorpay_sub_id")
+  plan            String
+  status          String    @default("created")
+  amountPaise     Int       @map("amount_paise")
+  billingCycle    String    @default("monthly") @map("billing_cycle")
+  startedAt       DateTime? @map("started_at")
+  expiresAt       DateTime? @map("expires_at")
+  cancelledAt     DateTime? @map("cancelled_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user            Users     @relation(fields: [userId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model AuditLog {
+  id        BigInt    @id @default(autoincrement())
+  userId    String?   @map("user_id") @db.Uuid
+  action    String
+  resource  String?
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+  status    String    @default("ok")
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      Users?    @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+model IngestionLog {
+  id          BigInt    @id @default(autoincrement())
+  source      String
+  status      String
+  recordsIn   Int       @default(0) @map("records_in")
+  recordsOut  Int       @default(0) @map("records_out")
+  errorMsg    String?   @map("error_msg")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  durationMs  Int?      @map("duration_ms")
+
+  @@map("ingestion_log")
+}
