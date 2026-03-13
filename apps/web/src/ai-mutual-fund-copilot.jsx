@@ -1,8 +1,7 @@
-
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  AI MUTUAL FUND COPILOT · PRODUCTION PLATFORM v4.0          ║
-// ║  Monorepo · CAS Parser · AMFI Pipeline · Monte Carlo        ║
-// ║  RAG/AI · Tax Engine · Corporate Actions · WebSocket        ║
+// ║  AI MUTUAL FUND COPILOT · PRODUCTION PLATFORM v5.0          ║
+// ║  Watchlist · Compare · News · Quiz · Rebalance · Goals      ║
+// ║  Benchmark · Health Report · Onboarding · Dark/Light · PWA  ║
 // ╚══════════════════════════════════════════════════════════════╝
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
@@ -70,6 +69,36 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .hov:hover{background:${T.hover}!important;border-color:${T.lineHi}!important}
 .btn:hover{opacity:.9}
 .btn:active{transform:scale(.98)}
+/* ── Mobile responsive ── */
+@media(max-width:768px){
+  html{font-size:12px}
+  .desktop-only{display:none!important}
+  .mobile-stack{flex-direction:column!important}
+  .mobile-full{width:100%!important;min-width:0!important}
+  .mobile-p{padding:10px!important}
+  .nav-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .grid-2{grid-template-columns:1fr!important}
+  .grid-3{grid-template-columns:1fr!important}
+  .grid-4{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:480px){
+  .grid-4{grid-template-columns:1fr!important}
+  .hide-xs{display:none!important}
+}
+/* ── Light mode overrides ── */
+body.light{background:#F4F6FA;color:#1A2540}
+body.light .card-el{background:#FFFFFF!important;border-color:#DDE3EE!important}
+body.light .surface-el{background:#EEF1F8!important}
+body.light .raised-el{background:#E6EAF4!important}
+body.light .muted-text{color:#6B7A99!important}
+body.light .body-text{color:#3D4F72!important}
+/* ── Notification panel ── */
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(100%);opacity:0}}
+.notif-panel{animation:slideIn .2s ease forwards}
+/* ── Quiz steps ── */
+@keyframes stepIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.quiz-step{animation:stepIn .25s ease forwards}
 `;
 
 // ═══════════════════════════════════════════════════════════════
@@ -2717,25 +2746,1020 @@ function GrowthPage({user}){
 }
 
 // ═══════════════════════════════════════════════════════════════
+// WATCHLIST & FUND ALERTS
+// ═══════════════════════════════════════════════════════════════
+function WatchlistPage({navMap}){
+  const ALL=Object.entries(FUNDS);
+  const [list,setList]=useState(["Quant Small Cap Fund","DSP Mid Cap Fund","ICICI Pru Technology","Nippon India Gold ETF"]);
+  const [alerts,setAlerts]=useState([
+    {fund:"Quant Small Cap Fund",type:"nav_above",value:220,triggered:false},
+    {fund:"DSP Mid Cap Fund",type:"return_1y_above",value:30,triggered:false},
+    {fund:"ICICI Pru Technology",type:"nav_below",value:170,triggered:false},
+  ]);
+  const [addFund,setAddFund]=useState("");
+  const [showAddAlert,setShowAddAlert]=useState(null);
+  const [alertType,setAlertType]=useState("nav_above");
+  const [alertVal,setAlertVal]=useState("");
+  const [search,setSearch]=useState("");
+  const inp={background:T.raised,border:`1px solid ${T.line}`,color:T.ink,borderRadius:6,padding:"7px 10px",fontSize:12,outline:"none",width:"100%"};
+
+  const watchedFunds=list.map(n=>({name:n,...FUNDS[n]})).filter(Boolean);
+  const filteredAll=ALL.filter(([n])=>n.toLowerCase().includes(search.toLowerCase())&&!list.includes(n));
+
+  const alertLabel={nav_above:"NAV rises above ₹",nav_below:"NAV falls below ₹",return_1y_above:"1Y return exceeds %",return_1y_below:"1Y return drops below %"};
+
+  // Check triggered alerts
+  const checkedAlerts=alerts.map(a=>{
+    const f=FUNDS[a.fund];const nav=navMap[a.fund]||f?.nav;
+    let triggered=false;
+    if(a.type==="nav_above") triggered=nav>=a.value;
+    if(a.type==="nav_below") triggered=nav<=a.value;
+    if(a.type==="return_1y_above") triggered=(f?.r1||0)>=a.value;
+    if(a.type==="return_1y_below") triggered=(f?.r1||0)<=a.value;
+    return {...a,triggered,currentVal:a.type.startsWith("nav")?nav:(f?.r1||0)};
+  });
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="grid-2">
+      {/* Watchlist */}
+      <Card>
+        <SH title="My Watchlist" icon="👁" mb={10} right={<Badge color={T.teal}>{list.length} funds</Badge>}/>
+        <div style={{position:"relative",marginBottom:10}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search funds to add…" style={{...inp,paddingRight:80}}/>
+          {search&&filteredAll.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:T.raised,border:`1px solid ${T.line}`,borderRadius:6,zIndex:20,maxHeight:180,overflowY:"auto",marginTop:2}}>
+            {filteredAll.slice(0,6).map(([n,f])=><div key={n} onClick={()=>{setList(l=>[...l,n]);setSearch("");}} style={{padding:"8px 11px",cursor:"pointer",fontSize:11,borderBottom:`1px solid ${T.faint}`}} className="hov">
+              <span style={{color:T.ink}}>{n}</span> <Badge color={T.ch[Object.keys(FUNDS).indexOf(n)%T.ch.length]}>{f.cat}</Badge>
+            </div>)}
+          </div>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {watchedFunds.map(f=>{
+            const nav=navMap[f.name]||f.nav;
+            const chg=((nav-f.nav)/f.nav*100).toFixed(2);
+            return <div key={f.name} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 11px",background:T.raised,borderRadius:7,border:`1px solid ${T.faint}`}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                <div style={{fontSize:9,color:T.muted,marginTop:2}}><Badge color={T.ch[Object.keys(FUNDS).indexOf(f.name)%T.ch.length]}>{f.cat}</Badge> · ER {f.er}%</div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <Mono c={T.ink} s={{fontSize:12,fontWeight:700}}>₹{nav.toFixed(2)}</Mono>
+                <div style={{marginTop:2}}><PnlChip v={+chg} sz={9}/></div>
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                <button onClick={()=>setShowAddAlert(f.name)} title="Set alert" style={{background:T.amberDim,border:`1px solid ${T.amber}28`,color:T.amber,borderRadius:4,padding:"3px 6px",fontSize:10,cursor:"pointer"}}>🔔</button>
+                <button onClick={()=>setList(l=>l.filter(x=>x!==f.name))} style={{background:T.redDim,border:`1px solid ${T.red}28`,color:T.red,borderRadius:4,padding:"3px 6px",fontSize:10,cursor:"pointer"}}>✕</button>
+              </div>
+            </div>;
+          })}
+          {list.length===0&&<div style={{color:T.muted,fontSize:11,padding:"20px",textAlign:"center"}}>Search above to add funds to your watchlist</div>}
+        </div>
+      </Card>
+
+      {/* Alerts */}
+      <Card>
+        <SH title="Price & Return Alerts" icon="🔔" mb={10} right={<Badge color={T.amber}>{checkedAlerts.filter(a=>a.triggered).length} triggered</Badge>}/>
+        {showAddAlert&&<div style={{background:T.raised,borderRadius:7,padding:"11px",border:`1px solid ${T.gold}30`,marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:600,color:T.gold,marginBottom:7}}>New alert for {showAddAlert.split(" ").slice(0,3).join(" ")}…</div>
+          <select value={alertType} onChange={e=>setAlertType(e.target.value)} style={{...inp,marginBottom:7,width:"100%"}}>
+            {Object.entries(alertLabel).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+          </select>
+          <div style={{display:"flex",gap:7}}>
+            <input value={alertVal} onChange={e=>setAlertVal(e.target.value)} placeholder="Value" type="number" style={{...inp,flex:1}}/>
+            <button onClick={()=>{if(alertVal){setAlerts(a=>[...a,{fund:showAddAlert,type:alertType,value:+alertVal,triggered:false}]);setShowAddAlert(null);setAlertVal("");}}} className="btn" style={{background:T.gold,color:"#0B0F17",border:"none",borderRadius:6,padding:"0 14px",fontWeight:700,cursor:"pointer",fontSize:11}}>Add</button>
+            <button onClick={()=>setShowAddAlert(null)} style={{background:"none",border:`1px solid ${T.line}`,color:T.muted,borderRadius:6,padding:"0 10px",cursor:"pointer",fontSize:11}}>✕</button>
+          </div>
+        </div>}
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {checkedAlerts.map((a,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 11px",background:a.triggered?T.greenDim:T.raised,borderRadius:7,border:`1px solid ${a.triggered?T.green+"40":T.faint}`}}>
+            <span style={{fontSize:13}}>{a.triggered?"✅":"⏳"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,fontWeight:600,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.fund.split(" ").slice(0,3).join(" ")}</div>
+              <div style={{fontSize:9,color:T.muted}}>{alertLabel[a.type]}{a.value} · Current: {a.currentVal?.toFixed(2)}</div>
+            </div>
+            {a.triggered&&<Badge color={T.green}>TRIGGERED</Badge>}
+            <button onClick={()=>setAlerts(al=>al.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:11,padding:"2px 5px"}}>✕</button>
+          </div>)}
+          {alerts.length===0&&<div style={{color:T.muted,fontSize:11,padding:"20px",textAlign:"center"}}>No alerts set. Click 🔔 on a fund to add one.</div>}
+        </div>
+      </Card>
+    </div>
+
+    {/* Fund metrics comparison */}
+    <Card>
+      <SH title="Watchlist Performance Snapshot" icon="📊"/>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.line}`}}>
+            {["Fund","Category","NAV","1Y Ret","3Y Ret","5Y Ret","Sharpe","ER","AUM (Cr)","Risk"].map(h=><th key={h} style={{padding:"6px 10px",color:T.muted,fontWeight:600,textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {watchedFunds.map(f=><tr key={f.name} style={{borderBottom:`1px solid ${T.faint}`}} className="hov">
+              <td style={{padding:"8px 10px",fontWeight:600,color:T.ink,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</td>
+              <td style={{padding:"8px 10px"}}><Badge color={T.teal}>{f.cat}</Badge></td>
+              <td style={{padding:"8px 10px"}}><Mono c={T.ink} s={{fontSize:11}}>₹{(navMap[f.name]||f.nav).toFixed(2)}</Mono></td>
+              <td style={{padding:"8px 10px"}}><PnlChip v={f.r1||0}/></td>
+              <td style={{padding:"8px 10px"}}><PnlChip v={f.r3||0}/></td>
+              <td style={{padding:"8px 10px"}}><PnlChip v={f.r5||0}/></td>
+              <td style={{padding:"8px 10px"}}><Mono c={T.teal} s={{fontSize:10}}>{f.sharpe?.toFixed(2)}</Mono></td>
+              <td style={{padding:"8px 10px",color:T.body}}>{f.er}%</td>
+              <td style={{padding:"8px 10px",color:T.body}}>{(f.aum/100).toFixed(0)}K</td>
+              <td style={{padding:"8px 10px"}}><Badge color={f.riskOMeter?.includes("Very")?T.red:f.riskOMeter?.includes("High")?T.amber:T.green}>{f.riskOMeter?.replace("Moderately ","Mod. ")||"—"}</Badge></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PORTFOLIO COMPARISON
+// ═══════════════════════════════════════════════════════════════
+function ComparePage({navMap}){
+  const fundNames=Object.keys(FUNDS);
+  const [fundA,setFundA]=useState("Axis Bluechip Fund");
+  const [fundB,setFundB]=useState("HDFC Top 100 Fund");
+  const [fundC,setFundC]=useState("UTI Nifty 50 Index Fund");
+  const sel={background:T.raised,border:`1px solid ${T.line}`,color:T.ink,borderRadius:7,padding:"8px 10px",fontSize:12,outline:"none",width:"100%",cursor:"pointer"};
+
+  const fA=FUNDS[fundA]||{};const fB=FUNDS[fundB]||{};const fC=FUNDS[fundC]||{};
+  const funds=[{n:fundA,f:fA,c:T.gold},{n:fundB,f:fB,c:T.teal},{n:fundC,f:fC,c:T.violet}];
+
+  const metrics=[
+    {label:"1Y Return",key:"r1",suffix:"%",higher:true},
+    {label:"3Y Return",key:"r3",suffix:"%",higher:true},
+    {label:"5Y Return",key:"r5",suffix:"%",higher:true},
+    {label:"10Y Return",key:"r10",suffix:"%",higher:true},
+    {label:"Expense Ratio",key:"er",suffix:"%",higher:false},
+    {label:"Volatility",key:"vol",suffix:"%",higher:false},
+    {label:"Sharpe Ratio",key:"sharpe",suffix:"",higher:true},
+    {label:"Max Drawdown",key:"maxDD",suffix:"%",higher:true},
+    {label:"Beta",key:"beta",suffix:"",higher:false},
+    {label:"Alpha",key:"alpha",suffix:"%",higher:true},
+    {label:"AUM (₹Cr)",key:"aum",suffix:"",higher:true},
+  ];
+
+  const radarData=["Returns","Cost","Risk-Adj","Stability","Alpha","AUM"].map((axis,i)=>{
+    const score=(f,i)=>[
+      Math.min(100,(f.r3||0)*3),
+      Math.max(0,100-(f.er||2)*30),
+      Math.min(100,(f.sharpe||0)*60),
+      Math.max(0,100+((f.maxDD||0))*2),
+      Math.min(100,50+(f.alpha||0)*10),
+      Math.min(100,(f.aum||0)/600),
+    ][i];
+    return {axis,A:Math.round(score(fA,i)),B:Math.round(score(fB,i)),C:Math.round(score(fC,i))};
+  });
+
+  const retChart=[1,3,5,10].map(y=>({y:`${y}Y`,A:fA[`r${y}`]||0,B:fB[`r${y}`]||0,C:fC[`r${y}`]||0}));
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Fund selectors */}
+    <Card>
+      <SH title="Select Funds to Compare (up to 3)" icon="⚖️" mb={12}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}} className="grid-3">
+        {[{val:fundA,set:setFundA,c:T.gold,label:"Fund A"},{val:fundB,set:setFundB,c:T.teal,label:"Fund B"},{val:fundC,set:setFundC,c:T.violet,label:"Fund C"}].map(({val,set,c,label})=><div key={label}>
+          <div style={{fontSize:9,color:c,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>{label}</div>
+          <select value={val} onChange={e=>set(e.target.value)} style={{...sel,borderColor:c+"40"}}>
+            {fundNames.map(n=><option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>)}
+      </div>
+    </Card>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="grid-2">
+      {/* Radar */}
+      <Card>
+        <SH title="Radar Comparison" icon="🕸️"/>
+        <ResponsiveContainer width="100%" height={240}>
+          <RadarChart data={radarData}>
+            <PolarGrid stroke={T.faint}/><PolarAngleAxis dataKey="axis" tick={{fill:T.muted,fontSize:10}}/>
+            {funds.map(({n,c},i)=><Radar key={i} name={n.split(" ").slice(0,2).join(" ")} dataKey={["A","B","C"][i]} stroke={c} fill={c} fillOpacity={.1} strokeWidth={2}/>)}
+            <Tooltip {...TT}/><Legend wrapperStyle={{fontSize:10}}/>
+          </RadarChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Return chart */}
+      <Card>
+        <SH title="Rolling Returns" icon="📈"/>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={retChart} barGap={3}>
+            <CartesianGrid strokeDasharray="3 3" stroke={T.faint}/>
+            <XAxis dataKey="y" tick={{fill:T.muted,fontSize:10}}/>
+            <YAxis tick={{fill:T.muted,fontSize:10}} tickFormatter={v=>`${v}%`}/>
+            <Tooltip {...TT} formatter={v=>`${v}%`}/>
+            <Legend wrapperStyle={{fontSize:10}}/>
+            {funds.map(({n,c},i)=><Bar key={i} name={n.split(" ").slice(0,2).join(" ")} dataKey={["A","B","C"][i]} fill={c} radius={[3,3,0,0]}/>)}
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+    </div>
+
+    {/* Metrics table */}
+    <Card>
+      <SH title="Head-to-Head Metrics" icon="📊"/>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.line}`}}>
+            <th style={{padding:"8px 12px",color:T.muted,fontWeight:600,fontSize:10,textAlign:"left"}}>Metric</th>
+            {funds.map(({n,c})=><th key={n} style={{padding:"8px 12px",color:c,fontWeight:700,fontSize:10,textAlign:"right",maxWidth:140}}>{n.split(" ").slice(0,3).join(" ")}</th>)}
+            <th style={{padding:"8px 12px",color:T.muted,fontWeight:600,fontSize:10,textAlign:"center"}}>Winner</th>
+          </tr></thead>
+          <tbody>
+            {metrics.map(({label,key,suffix,higher})=>{
+              const vals=funds.map(({f})=>+(f[key]||0));
+              const best=higher?Math.max(...vals):Math.min(...vals);
+              return <tr key={key} style={{borderBottom:`1px solid ${T.faint}`}} className="hov">
+                <td style={{padding:"7px 12px",fontSize:11,color:T.body}}>{label}</td>
+                {vals.map((v,i)=><td key={i} style={{padding:"7px 12px",textAlign:"right",fontFamily:"'Space Mono',monospace",fontSize:11,color:v===best?funds[i].c:T.ink,fontWeight:v===best?700:400}}>{v}{suffix}</td>)}
+                <td style={{padding:"7px 12px",textAlign:"center"}}>
+                  {funds.map(({n,c},i)=>vals[i]===best?<Badge key={i} color={c}>{n.split(" ")[0]}</Badge>:null)}
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+
+    {/* Overlap */}
+    <Card>
+      <SH title="Holdings Overlap Analysis" icon="🔄"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}} className="grid-3">
+        {[[0,1],[0,2],[1,2]].map(([i,j])=>{
+          const setA=new Set(funds[i].f.h||[]);const setB=new Set(funds[j].f.h||[]);
+          const common=[...setA].filter(x=>setB.has(x));
+          const overlap=Math.round(common.length/Math.max(1,new Set([...setA,...setB]).size)*100);
+          return <div key={`${i}${j}`} style={{background:T.raised,borderRadius:8,padding:"12px",border:`1px solid ${T.faint}`,textAlign:"center"}}>
+            <div style={{fontSize:10,color:T.muted,marginBottom:6}}>{funds[i].n.split(" ")[0]} ↔ {funds[j].n.split(" ")[0]}</div>
+            <Mono c={overlap>50?T.red:overlap>30?T.amber:T.green} s={{fontSize:22,fontWeight:700}}>{overlap}%</Mono>
+            <div style={{fontSize:9,color:T.muted,marginTop:4}}>overlap · {common.length} common stocks</div>
+            <div style={{marginTop:7,display:"flex",flexWrap:"wrap",gap:3,justifyContent:"center"}}>
+              {common.slice(0,4).map(s=><Badge key={s} color={T.muted}>{s.split(" ")[0]}</Badge>)}
+            </div>
+          </div>;
+        })}
+      </div>
+    </Card>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NEWS & MARKET INSIGHTS
+// ═══════════════════════════════════════════════════════════════
+function NewsPage(){
+  const [feed,setFeed]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [active,setActive]=useState("all");
+  const [query,setQuery]=useState("");
+
+  const STATIC_NEWS=[
+    {id:1,cat:"market",headline:"Nifty 50 scales new high at 25,342 amid strong FII inflows",summary:"Foreign institutional investors pumped ₹12,400 Cr into Indian equities this week, driven by expectation of rate cuts and robust Q2 earnings. Banking and IT sectors led the rally.",time:"2h ago",src:"Economic Times",tag:"Bullish",tagC:T.green},
+    {id:2,cat:"mf",headline:"SIP inflows cross ₹21,000 Cr in October 2024 — new record",summary:"Monthly SIP contributions hit an all-time high, reflecting growing retail investor participation. Equity mutual funds saw net inflows of ₹35,000+ Cr for the 8th consecutive month.",time:"4h ago",src:"AMFI",tag:"Record",tagC:T.gold},
+    {id:3,cat:"sebi",headline:"SEBI proposes new stress-testing norms for small & mid cap funds",summary:"Market regulator SEBI has issued a consultation paper requiring AMCs to conduct quarterly stress tests and disclose results publicly, enhancing transparency for small cap fund investors.",time:"6h ago",src:"SEBI",tag:"Regulation",tagC:T.violet},
+    {id:4,cat:"tax",headline:"Budget 2024: LTCG exemption raised to ₹1.25 lakh — what it means for MF investors",summary:"The enhanced exemption limit on long-term capital gains from equity mutual funds provides relief to retail investors. We break down the tax math for portfolios of various sizes.",time:"1d ago",src:"Mint",tag:"Tax",tagC:T.amber},
+    {id:5,cat:"mf",headline:"Parag Parikh Flexi Cap crosses ₹52,000 Cr AUM milestone",summary:"PPFAS Mutual Fund's flagship scheme continues its remarkable growth trajectory, adding ₹8,000 Cr in AUM over the last quarter. The fund maintains its unique global-domestic hybrid strategy.",time:"1d ago",src:"Value Research",tag:"AUM",tagC:T.teal},
+    {id:6,cat:"market",headline:"Gold ETF inflows surge as global uncertainty drives safe-haven demand",summary:"Amid Middle East tensions and US election uncertainty, gold ETFs in India recorded ₹1,200 Cr inflows last month. Nippon India Gold ETF and SBI Gold ETF were top beneficiaries.",time:"2d ago",src:"Moneycontrol",tag:"Gold",tagC:T.gold},
+    {id:7,cat:"sebi",headline:"KYC norms updated: Aadhaar-based eKYC now mandatory for new MF investors",summary:"SEBI and AMFI have aligned KYC requirements with DPDP Act 2023. New investors must complete Aadhaar-based eKYC within 30 days of first investment, effective January 2025.",time:"2d ago",src:"SEBI Circular",tag:"KYC",tagC:T.blue},
+    {id:8,cat:"mf",headline:"Quant Small Cap Fund: High returns but watch the concentration risk",summary:"The fund's impressive 48% 1-year return comes with significant sector concentration — 30% in materials alone. Risk-conscious investors should limit allocation to under 10% of portfolio.",time:"3d ago",src:"Morningstar",tag:"Analysis",tagC:T.amber},
+  ];
+
+  const [displayed,setDisplayed]=useState(STATIC_NEWS);
+
+  const cats=[{k:"all",l:"All News"},{k:"market",l:"Markets"},{k:"mf",l:"Mutual Funds"},{k:"sebi",l:"Regulation"},{k:"tax",l:"Tax"}];
+  const filtered=displayed.filter(n=>(active==="all"||n.cat===active)&&(query===""||n.headline.toLowerCase().includes(query.toLowerCase())||n.summary.toLowerCase().includes(query.toLowerCase())));
+
+  const fetchAIInsights=async()=>{
+    setLoading(true);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,
+          messages:[{role:"user",content:`Generate 3 current Indian mutual fund market insights in JSON array format. Each object: {id, cat (market/mf/sebi/tax), headline, summary (2 sentences), time, src, tag, tagC (hex color)}. Focus on: sector rotation, SIP trends, regulatory changes. Return only valid JSON array.`}]})});
+      const data=await res.json();
+      const text=data.content?.[0]?.text||"[]";
+      const clean=text.replace(/```json|```/g,"").trim();
+      const fresh=JSON.parse(clean);
+      setDisplayed([...fresh.map((n,i)=>({...n,id:100+i})),...STATIC_NEWS]);
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  const inp={background:T.raised,border:`1px solid ${T.line}`,color:T.ink,borderRadius:7,padding:"8px 12px",fontSize:12,outline:"none",flex:1};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Controls */}
+    <Card style={{padding:"12px 14px"}}>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search news…" style={inp}/>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {cats.map(c=><button key={c.k} onClick={()=>setActive(c.k)} className="btn" style={{background:active===c.k?T.gold+"22":"transparent",border:`1px solid ${active===c.k?T.gold:T.line}`,color:active===c.k?T.gold:T.muted,borderRadius:5,padding:"5px 10px",fontSize:10,cursor:"pointer",fontWeight:active===c.k?700:400}}>{c.l}</button>)}
+        </div>
+        <button onClick={fetchAIInsights} disabled={loading} className="btn" style={{background:`linear-gradient(135deg,${T.violet},${T.blue})`,color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",fontWeight:700,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+          {loading?<><Spin c="#fff" sz={11}/>Fetching…</>:<>🤖 AI Insights</>}
+        </button>
+      </div>
+    </Card>
+
+    {/* News feed */}
+    <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14,alignItems:"start"}} className="grid-2">
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {filtered.map(n=><Card key={n.id} style={{padding:"13px 15px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:7}}>
+            <h3 style={{fontSize:13,fontWeight:700,color:T.ink,lineHeight:1.4,margin:0,flex:1}}>{n.headline}</h3>
+            <Badge color={n.tagC||T.gold}>{n.tag}</Badge>
+          </div>
+          <p style={{fontSize:11,color:T.body,lineHeight:1.7,margin:"0 0 8px"}}>{n.summary}</p>
+          <div style={{display:"flex",gap:10,fontSize:9,color:T.muted}}>
+            <span>📰 {n.src}</span><span>🕐 {n.time}</span>
+          </div>
+        </Card>)}
+        {filtered.length===0&&<div style={{color:T.muted,fontSize:12,padding:"40px",textAlign:"center"}}>No news matches your filter.</div>}
+      </div>
+
+      {/* Sidebar */}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <Card>
+          <SH title="Market Pulse" icon="💓" mb={10}/>
+          {[{l:"Nifty 50",v:"25,342",c:"+0.8%",up:true},{l:"Sensex",v:"83,116",c:"+0.7%",up:true},{l:"Nifty MidCap",v:"56,870",c:"+1.2%",up:true},{l:"Gold (₹/10g)",v:"75,240",c:"-0.3%",up:false},{l:"₹/USD",v:"84.12",c:"-0.1%",up:false},{l:"10Y G-Sec",v:"7.02%",c:"+2bps",up:false}].map(m=><div key={m.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.faint}`,alignItems:"center"}}>
+            <span style={{fontSize:11,color:T.body}}>{m.l}</span>
+            <div style={{textAlign:"right"}}>
+              <Mono c={T.ink} s={{fontSize:11,fontWeight:600}}>{m.v}</Mono>
+              <span style={{fontSize:9,color:m.up?T.green:T.red,marginLeft:6}}>{m.c}</span>
+            </div>
+          </div>)}
+        </Card>
+        <Card>
+          <SH title="Top SIP Inflows (Oct '24)" icon="📊" mb={10}/>
+          {[["SBI Bluechip","₹820Cr"],["HDFC Mid Cap","₹640Cr"],["Axis ELSS","₹510Cr"],["Parag Parikh FC","₹480Cr"],["Mirae Large Cap","₹420Cr"]].map(([n,v])=><div key={n} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${T.faint}`}}>
+            <span style={{fontSize:10,color:T.body}}>{n}</span><Mono c={T.gold} s={{fontSize:10}}>{v}</Mono>
+          </div>)}
+        </Card>
+      </div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RISK PROFILING QUIZ → AUTO PORTFOLIO SUGGESTION
+// ═══════════════════════════════════════════════════════════════
+function RiskQuizPage({an,onSuggest}){
+  const QUESTIONS=[
+    {q:"What is your primary investment goal?",opts:["Capital preservation","Regular income","Wealth creation","Aggressive growth"],scores:[0,1,2,3]},
+    {q:"How long can you stay invested without touching the money?",opts:["Less than 1 year","1–3 years","3–7 years","More than 7 years"],scores:[0,1,2,3]},
+    {q:"If your portfolio dropped 25% in 3 months, you would:",opts:["Sell everything immediately","Sell a portion to reduce exposure","Hold and wait for recovery","Buy more at lower prices"],scores:[0,1,2,3]},
+    {q:"What is your current monthly income vs expenses?",opts:["Barely covering expenses","10–20% surplus","20–40% surplus","More than 40% surplus"],scores:[0,1,2,3]},
+    {q:"Do you have an emergency fund (6+ months expenses)?",opts:["No emergency fund","1–3 months saved","3–6 months saved","6+ months saved"],scores:[0,1,2,3]},
+    {q:"Your investment experience:",opts:["No experience","Tried FDs / RDs","Have some equity MF experience","Experienced with stocks & MFs"],scores:[0,1,2,3]},
+    {q:"How important is having a diversified global allocation?",opts:["Not important","Somewhat important","Important","Very important"],scores:[0,1,2,3]},
+  ];
+
+  const [step,setStep]=useState(0);
+  const [answers,setAnswers]=useState([]);
+  const [result,setResult]=useState(null);
+  const [aiLoading,setAiLoading]=useState(false);
+  const [aiInsight,setAiInsight]=useState("");
+
+  const PROFILES=[
+    {name:"Conservative",range:[0,7],color:T.blue,desc:"Capital preservation with modest growth. Focus on debt, hybrid, and large-cap index funds.",allocation:{
+      "Kotak Equity Hybrid":40,"UTI Nifty 50 Index Fund":30,"Axis Bluechip Fund":20,"Nippon India Gold ETF":10}},
+    {name:"Moderate",range:[8,14],color:T.teal,desc:"Balanced growth with managed downside. Mix of large-cap, multi-cap, and some mid-cap.",allocation:{
+      "Parag Parikh Flexi Cap":35,"Axis Bluechip Fund":25,"UTI Nifty 50 Index Fund":20,"DSP Mid Cap Fund":15,"Nippon India Gold ETF":5}},
+    {name:"Moderate-Aggressive",range:[15,17],color:T.amber,desc:"Growth-oriented with higher equity exposure across market caps.",allocation:{
+      "Parag Parikh Flexi Cap":30,"SBI Small Cap Fund":20,"DSP Mid Cap Fund":20,"Axis Bluechip Fund":15,"PPFAS Tax Saver Fund":15}},
+    {name:"Aggressive",range:[18,21],color:T.red,desc:"Maximum growth potential with high volatility tolerance. Equity-heavy with small/mid-cap bias.",allocation:{
+      "Quant Small Cap Fund":30,"SBI Small Cap Fund":25,"DSP Mid Cap Fund":20,"Parag Parikh Flexi Cap":15,"ICICI Pru Technology":10}},
+  ];
+
+  const finish=(finalAnswers)=>{
+    const total=finalAnswers.reduce((s,a,i)=>s+QUESTIONS[i].scores[a],0);
+    const profile=PROFILES.find(p=>total>=p.range[0]&&total<=p.range[1])||PROFILES[1];
+    setResult({profile,total,maxScore:21});
+    getAIInsight(profile,total);
+  };
+
+  const getAIInsight=async(profile,score)=>{
+    setAiLoading(true);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,
+          messages:[{role:"user",content:`Indian investor risk profile: ${profile.name} (score ${score}/21). In 3 sentences, explain why this profile fits, key risks to watch, and one pro tip for this investor type. Be specific to Indian MF market.`}]})});
+      const data=await res.json();
+      setAiInsight(data.content?.[0]?.text||"");
+    }catch{}
+    setAiLoading(false);
+  };
+
+  const progress=(step/QUESTIONS.length)*100;
+
+  if(result){
+    const {profile}=result;
+    const alloc=Object.entries(profile.allocation);
+    return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:700,margin:"0 auto"}}>
+      <Card style={{background:`linear-gradient(135deg,${profile.color}12,${T.card})`,border:`1px solid ${profile.color}30`}}>
+        <div style={{textAlign:"center",padding:"14px 0"}}>
+          <div style={{fontSize:11,color:T.muted,marginBottom:6,letterSpacing:".08em",textTransform:"uppercase"}}>Your Risk Profile</div>
+          <div style={{fontSize:32,fontWeight:900,color:profile.color,marginBottom:8}}>{profile.name}</div>
+          <div style={{fontSize:12,color:T.body,lineHeight:1.7,maxWidth:480,margin:"0 auto"}}>{profile.desc}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:14,marginTop:14}}>
+            <KPI label="Score" value={`${result.total}/${result.maxScore}`} color={profile.color}/>
+            <KPI label="Profile" value={profile.name} color={profile.color}/>
+          </div>
+        </div>
+      </Card>
+
+      {aiInsight&&<Card style={{border:`1px solid ${T.violet}30`,background:T.violetDim}}>
+        <SH title="AI Personalised Insight" icon="🤖" mb={8}/>
+        <p style={{fontSize:12,color:T.body,lineHeight:1.75,margin:0}}>{aiInsight}</p>
+      </Card>}
+      {aiLoading&&<Card><div style={{display:"flex",alignItems:"center",gap:8,color:T.muted,fontSize:12}}><Spin/> Generating personalised insight…</div></Card>}
+
+      <Card>
+        <SH title="Suggested Portfolio Allocation" icon="🎯" mb={12}/>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {alloc.map(([fund,pct])=>{
+            const f=FUNDS[fund]||{};
+            return <div key={fund} style={{display:"grid",gridTemplateColumns:"1fr 60px 180px",gap:10,alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:T.ink}}>{fund}</div>
+                <div style={{fontSize:9,color:T.muted}}>{f.cat} · ER {f.er}% · Sharpe {f.sharpe}</div>
+              </div>
+              <Mono c={profile.color} s={{fontSize:14,fontWeight:700,textAlign:"right"}}>{pct}%</Mono>
+              <Bar2 v={pct} max={50} c={profile.color}/>
+            </div>;
+          })}
+        </div>
+        <button onClick={()=>onSuggest&&onSuggest(profile.allocation)} className="btn" style={{marginTop:14,background:`linear-gradient(135deg,${profile.color},${T.gold})`,color:"#0B0F17",border:"none",borderRadius:7,padding:"10px 20px",fontWeight:700,fontSize:12,cursor:"pointer",width:"100%"}}>
+          Apply This Portfolio Suggestion →
+        </button>
+      </Card>
+      <button onClick={()=>{setStep(0);setAnswers([]);setResult(null);setAiInsight("");}} style={{background:"none",border:`1px solid ${T.line}`,color:T.muted,borderRadius:7,padding:"8px",cursor:"pointer",fontSize:11}}>Retake Quiz</button>
+    </div>;
+  }
+
+  const q=QUESTIONS[step];
+  return <div style={{maxWidth:600,margin:"0 auto"}}>
+    {/* Progress */}
+    <div style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+        <span style={{fontSize:10,color:T.muted}}>Question {step+1} of {QUESTIONS.length}</span>
+        <span style={{fontSize:10,color:T.gold}}>{Math.round(progress)}% complete</span>
+      </div>
+      <div style={{background:T.faint,borderRadius:4,height:4,overflow:"hidden"}}>
+        <div style={{width:`${progress}%`,height:"100%",background:`linear-gradient(90deg,${T.gold},${T.teal})`,borderRadius:4,transition:"width .4s ease"}}/>
+      </div>
+    </div>
+
+    <Card className="quiz-step" style={{padding:"28px 24px"}}>
+      <div style={{fontSize:16,fontWeight:700,color:T.ink,lineHeight:1.5,marginBottom:24}}>{q.q}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:9}}>
+        {q.opts.map((opt,i)=><button key={i} onClick={()=>{
+          const na=[...answers,i];
+          setAnswers(na);
+          if(step+1<QUESTIONS.length) setStep(s=>s+1);
+          else finish(na);
+        }} className="btn hov" style={{background:T.raised,border:`1px solid ${T.line}`,color:T.ink,borderRadius:8,padding:"12px 16px",cursor:"pointer",textAlign:"left",fontSize:12,fontWeight:500,transition:"all .12s",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{width:22,height:22,borderRadius:"50%",background:T.faint,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:T.muted,flexShrink:0}}>{String.fromCharCode(65+i)}</span>
+          {opt}
+        </button>)}
+      </div>
+    </Card>
+    {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{marginTop:10,background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:11}}>← Back</button>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REBALANCING PLANNER
+// ═══════════════════════════════════════════════════════════════
+function RebalancePage({an,holdings}){
+  const [target,setTarget]=useState(()=>{
+    if(!holdings) return {};
+    const eq=holdings.filter(h=>!["Hybrid","Gold ETF","Index"].includes(FUNDS[h.fund]?.cat));
+    const n=eq.length;
+    return Object.fromEntries(holdings.map(h=>[h.fund,Math.round(100/Math.max(1,holdings.length))]));
+  });
+  const [drift,setDrift]=useState(5);
+
+  if(!an||!holdings) return <Card><div style={{color:T.muted,padding:"30px",textAlign:"center"}}>Import your CAS statement to use the rebalancing planner.</div></Card>;
+
+  const totalVal=an.total||1;
+  const fundData=holdings.map(h=>{
+    const nav=FUNDS[h.fund]?.nav||h.nav||100;
+    const value=h.units*nav;
+    const currentPct=Math.round(value/totalVal*100*10)/10;
+    const targetPct=target[h.fund]||0;
+    const driftPct=currentPct-targetPct;
+    const needsRebalance=Math.abs(driftPct)>=drift;
+    const action=driftPct>drift?"REDUCE":driftPct<-drift?"INCREASE":"OK";
+    const amountToMove=Math.abs(driftPct/100*totalVal);
+    return {fund:h.fund,currentPct,targetPct,driftPct,needsRebalance,action,amountToMove,value};
+  });
+
+  const totalTarget=Object.values(target).reduce((a,b)=>a+b,0);
+  const rebalanceItems=fundData.filter(f=>f.needsRebalance);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Controls */}
+    <Card>
+      <SH title="Rebalancing Settings" icon="⚙️" mb={10}/>
+      <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:9,color:T.muted,marginBottom:4}}>DRIFT THRESHOLD</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <input type="range" min={2} max={15} value={drift} onChange={e=>setDrift(+e.target.value)} style={{width:100}}/>
+            <Mono c={T.gold} s={{fontSize:13,fontWeight:700}}>{drift}%</Mono>
+          </div>
+        </div>
+        <div style={{fontSize:10,color:T.body}}>Highlight funds that have drifted more than <strong style={{color:T.gold}}>{drift}%</strong> from target</div>
+        {totalTarget!==100&&<Badge color={T.red}>Target allocation sums to {totalTarget}% (should be 100%)</Badge>}
+        {totalTarget===100&&<Badge color={T.green}>✓ Targets sum to 100%</Badge>}
+        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+          {rebalanceItems.length>0&&<Badge color={T.amber}>{rebalanceItems.length} funds need rebalancing</Badge>}
+          {rebalanceItems.length===0&&<Badge color={T.green}>Portfolio is balanced ✓</Badge>}
+        </div>
+      </div>
+    </Card>
+
+    {/* Allocation table */}
+    <Card>
+      <SH title="Current vs Target Allocation" icon="⚖️" mb={12}/>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {fundData.map(f=>{
+          const ac=f.action==="REDUCE"?T.red:f.action==="INCREASE"?T.green:T.teal;
+          return <div key={f.fund} style={{background:f.needsRebalance?T.amberDim:T.raised,borderRadius:8,border:`1px solid ${f.needsRebalance?T.amber+"40":T.faint}`,padding:"10px 13px"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 80px 100px 90px",gap:8,alignItems:"center"}}>
+              <div style={{fontSize:11,fontWeight:600,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.fund}</div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:9,color:T.muted}}>Current</div>
+                <Mono c={T.ink} s={{fontSize:12,fontWeight:700}}>{f.currentPct}%</Mono>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:9,color:T.muted}}>Target</div>
+                <input type="number" min={0} max={100} value={target[f.fund]||0}
+                  onChange={e=>setTarget(t=>({...t,[f.fund]:+e.target.value}))}
+                  style={{width:"100%",background:T.surface,border:`1px solid ${T.line}`,color:T.gold,borderRadius:4,padding:"3px 5px",fontSize:12,fontWeight:700,fontFamily:"'Space Mono',monospace",textAlign:"right",outline:"none"}}/>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:9,color:T.muted}}>Drift</div>
+                <Mono c={f.driftPct>0?T.red:f.driftPct<0?T.green:T.muted} s={{fontSize:12}}>{f.driftPct>0?"+":""}{f.driftPct.toFixed(1)}%</Mono>
+              </div>
+              <div>
+                <Bar2 v={Math.abs(f.driftPct)} max={20} c={f.needsRebalance?T.amber:T.faint}/>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <Badge color={ac}>{f.action}</Badge>
+                {f.needsRebalance&&<div style={{fontSize:9,color:T.muted,marginTop:3}}>₹{(f.amountToMove/1000).toFixed(1)}K</div>}
+              </div>
+            </div>
+          </div>;
+        })}
+      </div>
+    </Card>
+
+    {/* Action plan */}
+    {rebalanceItems.length>0&&<Card style={{border:`1px solid ${T.amber}30`,background:T.amberDim}}>
+      <SH title="Rebalancing Action Plan" icon="📋" mb={12}/>
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {rebalanceItems.map(f=><div key={f.fund} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:T.card,borderRadius:7}}>
+          <span style={{fontSize:14}}>{f.action==="REDUCE"?"📉":"📈"}</span>
+          <div style={{flex:1}}>
+            <span style={{fontSize:11,fontWeight:600,color:T.ink}}>{f.action==="REDUCE"?"Redeem":"Invest additional"} </span>
+            <Mono c={T.gold} s={{fontSize:11,fontWeight:700}}>₹{(f.amountToMove).toLocaleString("en-IN",{maximumFractionDigits:0})}</Mono>
+            <span style={{fontSize:11,color:T.body}}> from <strong style={{color:T.ink}}>{f.fund.split(" ").slice(0,3).join(" ")}</strong></span>
+          </div>
+          <div style={{fontSize:9,color:T.muted}}>Drift: {f.driftPct>0?"+":""}{f.driftPct.toFixed(1)}%</div>
+        </div>)}
+      </div>
+      <div style={{marginTop:12,padding:"9px 11px",background:T.card,borderRadius:7,fontSize:10,color:T.muted}}>
+        ⚠️ Note: Consider tax implications (STCG/LTCG) before redeeming. SEBI wash-sale rules apply. Consult a SEBI-registered adviser.
+      </div>
+    </Card>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BENCHMARK COMPARISON — XIRR vs FD / Gold / Nifty
+// ═══════════════════════════════════════════════════════════════
+function BenchmarkPage({an,history}){
+  const BENCHMARKS=[
+    {name:"Fixed Deposit (SBI)",r:7.1,color:T.blue,icon:"🏦"},
+    {name:"Gold (Physical)",r:10.8,color:T.gold,icon:"🥇"},
+    {name:"Nifty 50 (Index)",r:13.9,color:T.teal,icon:"📈"},
+    {name:"Nifty 500",r:15.2,color:T.violet,icon:"📊"},
+    {name:"PPF",r:7.1,color:T.body,icon:"📋"},
+    {name:"Real Estate (avg)",r:8.5,color:T.amber,icon:"🏠"},
+  ];
+
+  const portfolioXIRR=an?.xirr||18.4;
+  const invested=an?.totalInvested||660000;
+  const years=3;
+
+  // Growth of ₹1L over time
+  const growthData=Array.from({length:years*12+1},(_,m)=>{
+    const y=m/12;
+    const row={month:m%12===0?`Y${Math.floor(y)}`:``,portfolio:Math.round(invested*Math.pow(1+portfolioXIRR/100/12,m))};
+    BENCHMARKS.forEach(b=>{row[b.name]=Math.round(invested*Math.pow(1+b.r/100/12,m));});
+    return row;
+  }).filter((_,i)=>i%3===0);
+
+  const endVals=BENCHMARKS.map(b=>({...b,finalVal:Math.round(invested*Math.pow(1+b.r/100,years)),alpha:+(portfolioXIRR-b.r).toFixed(1)}));
+  const portFinal=Math.round(invested*Math.pow(1+portfolioXIRR/100,years));
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Summary cards */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}} className="grid-4">
+      <Card style={{background:`linear-gradient(135deg,${T.gold}12,${T.card})`,border:`1px solid ${T.gold}30`}}>
+        <KPI label="Your Portfolio XIRR" value={`${portfolioXIRR.toFixed(1)}%`} color={T.gold} lg sub="3Y annualised"/>
+      </Card>
+      <Card><KPI label="Best Benchmark" value="Nifty 500" color={T.violet} sub="15.2% p.a."/></Card>
+      <Card><KPI label="Alpha vs Nifty 50" value={`+${(portfolioXIRR-13.9).toFixed(1)}%`} color={T.green} sub="outperformance"/></Card>
+      <Card><KPI label="Alpha vs FD" value={`+${(portfolioXIRR-7.1).toFixed(1)}%`} color={T.teal} sub="vs bank deposit"/></Card>
+    </div>
+
+    {/* Growth chart */}
+    <Card>
+      <SH title={`Growth of ₹${(invested/1e5).toFixed(1)}L invested (${years} Years)`} icon="📈"/>
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={growthData}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.faint}/>
+          <XAxis dataKey="month" tick={{fill:T.muted,fontSize:9}}/>
+          <YAxis tick={{fill:T.muted,fontSize:9}} tickFormatter={v=>`₹${(v/1e5).toFixed(1)}L`}/>
+          <Tooltip {...TT} formatter={v=>`₹${(v/1e5).toFixed(2)}L`}/>
+          <Legend wrapperStyle={{fontSize:10}}/>
+          <Line name="Your Portfolio" dataKey="portfolio" stroke={T.gold} strokeWidth={3} dot={false}/>
+          {BENCHMARKS.slice(0,4).map(b=><Line key={b.name} name={b.name} dataKey={b.name} stroke={b.color} strokeWidth={1.5} dot={false} strokeDasharray="4 2"/>)}
+        </LineChart>
+      </ResponsiveContainer>
+    </Card>
+
+    {/* Comparison table */}
+    <Card>
+      <SH title="Head-to-Head Returns vs Benchmarks" icon="🏆" mb={12}/>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {/* Your portfolio row */}
+        <div style={{display:"grid",gridTemplateColumns:"30px 1fr 80px 100px 80px 80px",gap:10,alignItems:"center",padding:"10px 12px",background:`linear-gradient(135deg,${T.gold}14,${T.card})`,borderRadius:8,border:`1px solid ${T.gold}40`}}>
+          <span style={{fontSize:14}}>⭐</span>
+          <div><div style={{fontSize:11,fontWeight:700,color:T.gold}}>Your Portfolio</div><div style={{fontSize:9,color:T.muted}}>MF Copilot tracked</div></div>
+          <Mono c={T.gold} s={{fontSize:12,fontWeight:700}}>{portfolioXIRR.toFixed(1)}%</Mono>
+          <Mono c={T.ink} s={{fontSize:11}}>₹{(portFinal/1e5).toFixed(2)}L</Mono>
+          <Badge color={T.gold}>BEST</Badge>
+          <div style={{fontSize:9,color:T.muted}}>—</div>
+        </div>
+        {endVals.sort((a,b)=>b.r-a.r).map(b=><div key={b.name} style={{display:"grid",gridTemplateColumns:"30px 1fr 80px 100px 80px 80px",gap:10,alignItems:"center",padding:"9px 12px",background:T.raised,borderRadius:7,border:`1px solid ${T.faint}`}}>
+          <span style={{fontSize:14}}>{b.icon}</span>
+          <div><div style={{fontSize:11,fontWeight:600,color:T.ink}}>{b.name}</div></div>
+          <Mono c={T.body} s={{fontSize:11}}>{b.r}%</Mono>
+          <Mono c={T.body} s={{fontSize:11}}>₹{(b.finalVal/1e5).toFixed(2)}L</Mono>
+          <Badge color={b.alpha>0?T.green:T.red}>{b.alpha>0?"+":""}{b.alpha}%</Badge>
+          <div style={{fontSize:9,color:T.muted}}>vs portfolio</div>
+        </div>)}
+      </div>
+      <div style={{marginTop:10,fontSize:9,color:T.muted}}>*Returns annualised over {years} years. FD rates as of Oct 2024. Gold based on MCX spot. Past performance is not indicative of future results.</div>
+    </Card>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GOAL TRACKER WITH MILESTONES
+// ═══════════════════════════════════════════════════════════════
+function GoalTrackerPage({an}){
+  const [goals,setGoals]=useState([
+    {id:1,name:"Retirement Corpus",target:10000000,current:660000,deadline:"2040-12-31",sip:15000,icon:"🏖️",color:T.gold,category:"retirement"},
+    {id:2,name:"Child's Education",target:2500000,current:190000,deadline:"2033-06-30",sip:8000,icon:"🎓",color:T.teal,category:"education"},
+    {id:3,name:"Dream Home Down Payment",target:1500000,current:430000,deadline:"2028-12-31",sip:12000,icon:"🏠",color:T.violet,category:"property"},
+    {id:4,name:"Emergency Fund",target:300000,current:280000,deadline:"2025-03-31",sip:5000,icon:"🛡️",color:T.green,category:"emergency"},
+  ]);
+  const [showAdd,setShowAdd]=useState(false);
+  const [newGoal,setNewGoal]=useState({name:"",target:"",sip:"",deadline:"",icon:"🎯",color:T.blue});
+
+  const getMilestones=(pct)=>[25,50,75,100].map(m=>({pct:m,done:pct>=m,label:m===100?"🎉 Achieved!":m===75?"Almost there!":m===50?"Halfway!":"Started!"}));
+  const getDaysLeft=(deadline)=>Math.max(0,Math.round((new Date(deadline)-new Date())/864e5));
+  const getSIPNeeded=(target,current,deadline)=>{
+    const months=Math.max(1,getDaysLeft(deadline)/30);
+    const r=0.012; // 14.4% annualised monthly
+    const remaining=target-current;
+    return Math.round(remaining*r/(Math.pow(1+r,months)-1));
+  };
+
+  const inp={background:T.raised,border:`1px solid ${T.line}`,color:T.ink,borderRadius:6,padding:"7px 10px",fontSize:12,outline:"none",width:"100%"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{fontSize:12,color:T.muted}}>{goals.length} active goals · Total target ₹{(goals.reduce((s,g)=>s+g.target,0)/1e7).toFixed(2)}Cr</div>
+      <button onClick={()=>setShowAdd(true)} className="btn" style={{background:`linear-gradient(135deg,${T.gold},${T.teal})`,color:"#0B0F17",border:"none",borderRadius:7,padding:"7px 14px",fontWeight:700,fontSize:11,cursor:"pointer"}}>+ New Goal</button>
+    </div>
+
+    {showAdd&&<Card style={{border:`1px solid ${T.gold}30`}}>
+      <SH title="Add New Goal" icon="🎯" mb={10}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}} className="grid-2">
+        <input value={newGoal.name} onChange={e=>setNewGoal(g=>({...g,name:e.target.value}))} placeholder="Goal name (e.g. Car, Vacation)" style={inp}/>
+        <input value={newGoal.target} onChange={e=>setNewGoal(g=>({...g,target:e.target.value}))} placeholder="Target amount (₹)" type="number" style={inp}/>
+        <input value={newGoal.sip} onChange={e=>setNewGoal(g=>({...g,sip:e.target.value}))} placeholder="Monthly SIP (₹)" type="number" style={inp}/>
+        <input value={newGoal.deadline} onChange={e=>setNewGoal(g=>({...g,deadline:e.target.value}))} type="date" style={inp}/>
+      </div>
+      <div style={{display:"flex",gap:7,marginTop:9}}>
+        <button onClick={()=>{if(newGoal.name&&newGoal.target){setGoals(g=>[...g,{...newGoal,id:Date.now(),target:+newGoal.target,sip:+newGoal.sip,current:0}]);setShowAdd(false);setNewGoal({name:"",target:"",sip:"",deadline:"",icon:"🎯",color:T.blue});}}} className="btn" style={{background:T.gold,color:"#0B0F17",border:"none",borderRadius:6,padding:"8px 16px",fontWeight:700,fontSize:11,cursor:"pointer"}}>Add Goal</button>
+        <button onClick={()=>setShowAdd(false)} style={{background:"none",border:`1px solid ${T.line}`,color:T.muted,borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:11}}>Cancel</button>
+      </div>
+    </Card>}
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}} className="grid-2">
+      {goals.map(g=>{
+        const pct=Math.min(100,Math.round(g.current/g.target*100));
+        const daysLeft=getDaysLeft(g.deadline);
+        const sipNeeded=getSIPNeeded(g.target,g.current,g.deadline);
+        const milestones=getMilestones(pct);
+        const onTrack=g.sip>=sipNeeded;
+        return <Card key={g.id} style={{border:`1px solid ${g.color}28`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:20}}>{g.icon}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:T.ink}}>{g.name}</div>
+                <div style={{fontSize:9,color:T.muted}}>Target: ₹{(g.target/1e5).toFixed(1)}L · {daysLeft} days left</div>
+              </div>
+            </div>
+            <Badge color={onTrack?T.green:T.red}>{onTrack?"On Track":"Behind"}</Badge>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:10,color:T.muted}}>₹{(g.current/1e5).toFixed(1)}L saved</span>
+              <Mono c={g.color} s={{fontSize:13,fontWeight:700}}>{pct}%</Mono>
+            </div>
+            <div style={{background:T.faint,borderRadius:6,height:8,overflow:"hidden"}}>
+              <div style={{width:`${pct}%`,height:"100%",background:`linear-gradient(90deg,${g.color},${g.color}AA)`,borderRadius:6,transition:"width .8s ease"}}/>
+            </div>
+          </div>
+
+          {/* Milestones */}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+            {milestones.map(m=><div key={m.pct} style={{textAlign:"center",flex:1}}>
+              <div style={{width:18,height:18,borderRadius:"50%",background:m.done?g.color:T.faint,margin:"0 auto 3px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:m.done?"#0B0F17":T.muted,fontWeight:700}}>{m.done?"✓":m.pct}</div>
+              <div style={{fontSize:8,color:m.done?g.color:T.muted}}>{m.pct}%</div>
+            </div>)}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+            <div style={{background:T.raised,borderRadius:6,padding:"7px 9px"}}>
+              <div style={{fontSize:8,color:T.muted,marginBottom:2}}>YOUR SIP</div>
+              <Mono c={T.ink} s={{fontSize:12}}>₹{g.sip.toLocaleString("en-IN")}/mo</Mono>
+            </div>
+            <div style={{background:onTrack?T.greenDim:T.redDim,borderRadius:6,padding:"7px 9px",border:`1px solid ${(onTrack?T.green:T.red)+"30"}`}}>
+              <div style={{fontSize:8,color:T.muted,marginBottom:2}}>SIP NEEDED</div>
+              <Mono c={onTrack?T.green:T.red} s={{fontSize:12}}>₹{sipNeeded.toLocaleString("en-IN")}/mo</Mono>
+            </div>
+          </div>
+          <button onClick={()=>setGoals(gl=>gl.filter(x=>x.id!==g.id))} style={{marginTop:8,background:"none",border:"none",color:T.muted,fontSize:9,cursor:"pointer",padding:0}}>Remove goal</button>
+        </Card>;
+      })}
+    </div>
+
+    {/* Summary */}
+    <Card>
+      <SH title="Goals Overview" icon="📊" mb={12}/>
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={goals.map(g=>({name:g.name.split(" ").slice(0,2).join(" "),saved:Math.round(g.current/1e5*10)/10,remaining:Math.round((g.target-g.current)/1e5*10)/10}))}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.faint}/>
+          <XAxis dataKey="name" tick={{fill:T.muted,fontSize:9}}/>
+          <YAxis tick={{fill:T.muted,fontSize:9}} tickFormatter={v=>`₹${v}L`}/>
+          <Tooltip {...TT} formatter={v=>`₹${v}L`}/>
+          <Legend wrapperStyle={{fontSize:10}}/>
+          <Bar name="Saved" dataKey="saved" fill={T.teal} stackId="a" radius={[0,0,3,3]}/>
+          <Bar name="Remaining" dataKey="remaining" fill={T.faint} stackId="a" radius={[3,3,0,0]}/>
+        </BarChart>
+      </ResponsiveContainer>
+    </Card>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PORTFOLIO HEALTH REPORT (PDF Export)
+// ═══════════════════════════════════════════════════════════════
+function HealthReportPage({an,user,holdings}){
+  const [generating,setGenerating]=useState(false);
+  const [aiSummary,setAiSummary]=useState("");
+  const [generated,setGenerated]=useState(false);
+
+  if(!an||!holdings) return <Card><div style={{color:T.muted,padding:"30px",textAlign:"center"}}>Import your CAS statement to generate a health report.</div></Card>;
+
+  const score=an.healthScore||72;
+  const grade=score>=80?"A":score>=65?"B":score>=50?"C":"D";
+  const gradeColor=score>=80?T.green:score>=65?T.teal:score>=50?T.amber:T.red;
+
+  const sections=[
+    {title:"Portfolio Value",value:`₹${(an.total/1e5).toFixed(2)}L`,status:T.green,icon:"💰"},
+    {title:"Total P&L",value:`₹${(an.pnl/1e5).toFixed(2)}L (${an.pnlPct?.toFixed(1)}%)`,status:an.pnl>0?T.green:T.red,icon:"📈"},
+    {title:"XIRR",value:`${an.xirr?.toFixed(1)||18.4}%`,status:an.xirr>12?T.green:T.amber,icon:"⚡"},
+    {title:"Sharpe Ratio",value:`${an.wSharpe?.toFixed(2)||0.94}`,status:an.wSharpe>0.8?T.green:T.amber,icon:"📊"},
+    {title:"Max Drawdown",value:`${an.maxDD?.toFixed(1)||-22.4}%`,status:Math.abs(an.maxDD||22)<25?T.green:T.red,icon:"📉"},
+    {title:"Expense Ratio (avg)",value:`${an.wER?.toFixed(2)||0.73}%`,status:(an.wER||0.73)<1?T.green:T.amber,icon:"💸"},
+    {title:"No. of Funds",value:`${holdings.length}`,status:holdings.length>=3&&holdings.length<=8?T.green:T.amber,icon:"🗂️"},
+    {title:"Diversification",value:`${an.diversityScore||68}/100`,status:(an.diversityScore||68)>=60?T.green:T.amber,icon:"🌐"},
+  ];
+
+  const generateReport=async()=>{
+    setGenerating(true);
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,
+          messages:[{role:"user",content:`Write a 4-sentence executive summary for an Indian mutual fund portfolio health report. Portfolio: ${holdings.length} funds, total value ₹${(an.total/1e5).toFixed(1)}L, XIRR ${an.xirr?.toFixed(1)||18}%, health score ${score}/100, grade ${grade}. Cover: overall assessment, key strength, main risk, one action recommendation. Be specific and professional.`}]})});
+      const data=await res.json();
+      setAiSummary(data.content?.[0]?.text||"");
+    }catch{}
+    setGenerating(false);
+    setGenerated(true);
+  };
+
+  const printReport=()=>{
+    window.print();
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <Card style={{background:`linear-gradient(135deg,${T.gold}10,${T.teal}06)`,border:`1px solid ${T.gold}30`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:11,color:T.muted,marginBottom:4,letterSpacing:".06em",textTransform:"uppercase"}}>Portfolio Health Report</div>
+          <div style={{fontSize:16,fontWeight:800,color:T.ink}}>{user?.name||"Investor"}'s Portfolio</div>
+          <div style={{fontSize:10,color:T.muted,marginTop:3}}>Generated {new Date().toLocaleDateString("en-IN",{dateStyle:"long"})}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{width:72,height:72,borderRadius:"50%",background:`linear-gradient(135deg,${gradeColor},${gradeColor}88)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:900,color:"#0B0F17"}}>{grade}</div>
+            <div style={{fontSize:9,color:T.muted,marginTop:4}}>Grade</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <Mono c={gradeColor} s={{fontSize:28,fontWeight:900}}>{score}</Mono>
+            <div style={{fontSize:9,color:T.muted}}>Health Score</div>
+          </div>
+        </div>
+      </div>
+    </Card>
+
+    {/* AI Summary */}
+    {!generated&&<Card style={{textAlign:"center",padding:"24px"}}>
+      <div style={{fontSize:13,color:T.body,marginBottom:14}}>Generate an AI-written executive summary and full health report</div>
+      <button onClick={generateReport} disabled={generating} className="btn" style={{background:`linear-gradient(135deg,${T.gold},${T.teal})`,color:"#0B0F17",border:"none",borderRadius:8,padding:"11px 24px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7}}>
+        {generating?<><Spin c="#0B0F17"/>Generating Report…</>:"🤖 Generate AI Health Report"}
+      </button>
+    </Card>}
+
+    {aiSummary&&<Card style={{border:`1px solid ${T.violet}30`,background:T.violetDim}}>
+      <SH title="AI Executive Summary" icon="🤖" mb={8}/>
+      <p style={{fontSize:12,color:T.body,lineHeight:1.8,margin:0}}>{aiSummary}</p>
+    </Card>}
+
+    {/* Metrics grid */}
+    <Card>
+      <SH title="Key Performance Metrics" icon="📊" mb={12}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}} className="grid-4">
+        {sections.map(s=><div key={s.title} style={{background:T.raised,borderRadius:8,padding:"11px",border:`1px solid ${s.status}28`}}>
+          <div style={{fontSize:13,marginBottom:4}}>{s.icon}</div>
+          <div style={{fontSize:9,color:T.muted,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>{s.title}</div>
+          <Mono c={s.status} s={{fontSize:12,fontWeight:700}}>{s.value}</Mono>
+        </div>)}
+      </div>
+    </Card>
+
+    {/* Fund breakdown */}
+    <Card>
+      <SH title="Fund-Level Analysis" icon="🗂️" mb={12}/>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.line}`}}>
+            {["Fund","Category","Units","Invested","Current Value","P&L","P&L%","Weight"].map(h=><th key={h} style={{padding:"6px 10px",color:T.muted,fontWeight:600,textAlign:"left",whiteSpace:"nowrap",fontSize:9}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(holdings||[]).map(h=>{
+              const f=FUNDS[h.fund]||{};const nav=f.nav||h.nav||100;
+              const val=h.units*(navMap?.[h.fund]||nav);
+              const pnl=val-h.invested;const pnlP=h.invested>0?pnl/h.invested*100:0;
+              const wt=an.total>0?val/an.total*100:0;
+              return <tr key={h.fund} style={{borderBottom:`1px solid ${T.faint}`}}>
+                <td style={{padding:"8px 10px",fontWeight:600,color:T.ink,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.fund}</td>
+                <td style={{padding:"8px 10px"}}><Badge color={T.teal}>{f.cat||"—"}</Badge></td>
+                <td style={{padding:"8px 10px"}}><Mono c={T.body} s={{fontSize:10}}>{h.units?.toFixed(3)}</Mono></td>
+                <td style={{padding:"8px 10px"}}><Mono c={T.body} s={{fontSize:10}}>₹{(h.invested/1e5).toFixed(2)}L</Mono></td>
+                <td style={{padding:"8px 10px"}}><Mono c={T.ink} s={{fontSize:10,fontWeight:700}}>₹{(val/1e5).toFixed(2)}L</Mono></td>
+                <td style={{padding:"8px 10px"}}><Mono c={pnl>=0?T.green:T.red} s={{fontSize:10}}>{pnl>=0?"+":""}₹{Math.abs(pnl/1000).toFixed(1)}K</Mono></td>
+                <td style={{padding:"8px 10px"}}><PnlChip v={pnlP}/></td>
+                <td style={{padding:"8px 10px"}}><Mono c={T.muted} s={{fontSize:10}}>{wt.toFixed(1)}%</Mono></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+
+    {generated&&<div style={{display:"flex",gap:10}}>
+      <button onClick={printReport} className="btn" style={{background:`linear-gradient(135deg,${T.gold},${T.goldLt})`,color:"#0B0F17",border:"none",borderRadius:7,padding:"10px 20px",fontWeight:700,fontSize:12,cursor:"pointer",flex:1}}>
+        🖨️ Print / Save as PDF
+      </button>
+      <button onClick={()=>{const el=document.createElement("a");el.href="data:text/plain;charset=utf-8,"+encodeURIComponent(aiSummary);el.download="mf-copilot-report.txt";el.click();}} className="btn" style={{background:T.raised,border:`1px solid ${T.line}`,color:T.ink,borderRadius:7,padding:"10px 20px",fontWeight:600,fontSize:12,cursor:"pointer"}}>
+        📥 Export Summary
+      </button>
+    </div>}
+    <div style={{fontSize:9,color:T.muted,padding:"6px 0"}}>⚠️ SEBI Disclaimer: This report is for informational purposes only. It does not constitute investment advice. Past performance does not guarantee future results. Consult a SEBI-registered investment adviser.</div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ONBOARDING OVERLAY
+// ═══════════════════════════════════════════════════════════════
+function OnboardingOverlay({user,onDone}){
+  const [step,setStep]=useState(0);
+  const steps=[
+    {icon:"👋",title:`Welcome, ${user?.name?.split(" ")[0]||"Investor"}!`,body:"MF Copilot is your AI-powered mutual fund intelligence platform. In 3 quick steps, we'll get you set up.",cta:"Let's go →"},
+    {icon:"📄",title:"Import Your Portfolio",body:"Upload your CAS (Consolidated Account Statement) from CAMS or KFintech. We'll auto-import all your funds, units, and transaction history in seconds.",cta:"Got it →",hint:"Go to: Setup → Import CAS"},
+    {icon:"🤖",title:"Meet Your AI Advisor",body:"Ask anything — 'Is my portfolio over-concentrated in small caps?' or 'How much SIP do I need for ₹1 Cr retirement?' Your AI answers with data from SEBI circulars and fund factsheets.",cta:"Next →",hint:"Go to: AI → AI Advisor"},
+    {icon:"🎯",title:"Set Goals & Track Progress",body:"Create financial goals (retirement, education, home), track milestones, get rebalancing alerts, and see if you're on track — all in one place.",cta:"Start exploring →",hint:"Go to: Quant → Goal Tracker"},
+  ];
+  const s=steps[step];
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{background:T.card,borderRadius:16,padding:"32px 28px",maxWidth:440,width:"100%",border:`1px solid ${T.gold}30`,boxShadow:`0 20px 60px rgba(0,0,0,.5)`,animation:"fadeUp .3s ease"}}>
+      <div style={{textAlign:"center",marginBottom:20}}>
+        <div style={{fontSize:48,marginBottom:12}}>{s.icon}</div>
+        <h2 style={{fontSize:18,fontWeight:800,color:T.ink,marginBottom:8,letterSpacing:"-.03em"}}>{s.title}</h2>
+        <p style={{fontSize:12,color:T.body,lineHeight:1.75,margin:0}}>{s.body}</p>
+        {s.hint&&<div style={{marginTop:10,background:T.raised,borderRadius:6,padding:"7px 12px",fontSize:10,color:T.gold,fontFamily:"'Space Mono',monospace"}}>{s.hint}</div>}
+      </div>
+      {/* Progress dots */}
+      <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:20}}>
+        {steps.map((_,i)=><div key={i} style={{width:i===step?20:7,height:7,borderRadius:4,background:i===step?T.gold:T.faint,transition:"all .3s"}}/>)}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{background:T.raised,border:`1px solid ${T.line}`,color:T.muted,borderRadius:8,padding:"10px 16px",cursor:"pointer",fontSize:12}}>← Back</button>}
+        <button onClick={()=>step<steps.length-1?setStep(s=>s+1):onDone()} className="btn" style={{flex:1,background:`linear-gradient(135deg,${T.gold},${T.goldLt})`,color:"#0B0F17",border:"none",borderRadius:8,padding:"11px",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+          {s.cta}
+        </button>
+      </div>
+      <button onClick={onDone} style={{display:"block",margin:"12px auto 0",background:"none",border:"none",color:T.muted,fontSize:10,cursor:"pointer"}}>Skip intro</button>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NOTIFICATION CENTER
+// ═══════════════════════════════════════════════════════════════
+function NotificationPanel({open,onClose,notifications,onClear}){
+  if(!open) return null;
+  return <>
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:199}}/>
+    <div className="notif-panel" style={{position:"fixed",top:0,right:0,height:"100vh",width:320,background:T.surface,border:`1px solid ${T.line}`,zIndex:200,display:"flex",flexDirection:"column",boxShadow:"-8px 0 40px rgba(0,0,0,.4)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 16px 12px",borderBottom:`1px solid ${T.line}`}}>
+        <div style={{fontSize:13,fontWeight:700,color:T.ink}}>Notifications</div>
+        <div style={{display:"flex",gap:7}}>
+          <button onClick={onClear} style={{background:"none",border:`1px solid ${T.line}`,color:T.muted,borderRadius:5,padding:"3px 8px",fontSize:9,cursor:"pointer"}}>Clear all</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"8px"}}>
+        {notifications.length===0&&<div style={{color:T.muted,fontSize:11,textAlign:"center",padding:"40px 20px"}}>No notifications yet</div>}
+        {notifications.map((n,i)=><div key={i} style={{display:"flex",gap:10,padding:"10px 10px",borderRadius:7,marginBottom:6,background:n.read?T.raised:T.card,border:`1px solid ${n.read?T.faint:T.line}`}}>
+          <span style={{fontSize:16,flexShrink:0}}>{n.icon}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:n.read?400:600,color:T.ink,marginBottom:2}}>{n.title}</div>
+            <div style={{fontSize:10,color:T.muted,lineHeight:1.5}}>{n.body}</div>
+            <div style={{fontSize:9,color:T.muted,marginTop:4}}>{n.time}</div>
+          </div>
+          {!n.read&&<div style={{width:6,height:6,borderRadius:"50%",background:T.gold,flexShrink:0,marginTop:4}}/>}
+        </div>)}
+      </div>
+    </div>
+  </>;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ROOT APPLICATION
 // ═══════════════════════════════════════════════════════════════
 const PAGES=[
   {id:"import",    icon:"📄",label:"Import CAS",    group:"setup"},
   {id:"pipeline",  icon:"🔄",label:"NAV Pipeline",  group:"setup"},
+  {id:"onboarding",icon:"👋",label:"Getting Started",group:"setup"},
   {id:"dashboard", icon:"⬡", label:"Dashboard",    group:"analytics"},
   {id:"analytics", icon:"📈",label:"Performance",  group:"analytics"},
+  {id:"benchmark", icon:"🏆",label:"Benchmark",    group:"analytics"},
   {id:"screener",  icon:"🔍",label:"Fund Screener", group:"analytics"},
+  {id:"compare",   icon:"⚖️",label:"Compare",      group:"analytics"},
+  {id:"watchlist", icon:"👁", label:"Watchlist",    group:"analytics"},
   {id:"corpact",   icon:"⚡",label:"Corp. Actions", group:"analytics"},
   {id:"montecarlo",icon:"🎲",label:"Monte Carlo",   group:"quant"},
   {id:"tax",       icon:"📋",label:"Tax Engine",    group:"quant"},
   {id:"sip",       icon:"🎯",label:"SIP Planner",   group:"quant"},
+  {id:"rebalance", icon:"⚖️",label:"Rebalance",     group:"quant"},
+  {id:"goals",     icon:"🏅",label:"Goal Tracker",  group:"quant"},
   {id:"ai",        icon:"🤖",label:"AI Advisor",    group:"intelligence"},
+  {id:"news",      icon:"📰",label:"Market News",   group:"intelligence"},
+  {id:"quiz",      icon:"🧠",label:"Risk Quiz",     group:"intelligence"},
+  {id:"report",    icon:"📑",label:"Health Report", group:"intelligence"},
   {id:"security",  icon:"🔒",label:"Security",      group:"infra"},
   {id:"infra",     icon:"🏗", label:"Infrastructure",group:"infra"},
   {id:"monetize",  icon:"💳",label:"Monetize",      group:"business"},
   {id:"growth",    icon:"📡",label:"Growth",        group:"business"},
 ];
-const GROUPS={setup:"Setup",analytics:"Analytics",quant:"Quant",intelligence:"AI",infra:"Infrastructure",business:"Business"};
+const GROUPS={setup:"Setup",analytics:"Analytics",quant:"Quant",intelligence:"AI & Insights",infra:"Infrastructure",business:"Business"};
 
 export default function App(){
   const [user,setUser]=useState(null);
@@ -2744,12 +3768,27 @@ export default function App(){
   const [navMap,setNavMap]=useState(()=>Object.fromEntries(Object.entries(FUNDS).map(([n,f])=>[n,f.nav])));
   const [an,setAn]=useState(null);
   const [history,setHistory]=useState(null);
+  // New state
+  const [darkMode,setDarkMode]=useState(true);
+  const [showNotif,setShowNotif]=useState(false);
+  const [showOnboarding,setShowOnboarding]=useState(false);
+  const [notifications,setNotifications]=useState([
+    {icon:"📄",title:"CAS Import Ready",body:"Upload your CAMS or KFintech PDF to auto-import your portfolio",time:"Just now",read:false},
+    {icon:"🤖",title:"AI Advisor Available",body:"Ask your AI advisor anything about your funds",time:"2 min ago",read:false},
+    {icon:"🔔",title:"NAV Updated",body:"Today's NAV data has been refreshed from AMFI",time:"11:32 PM",read:true},
+    {icon:"⚡",title:"Bonus units credited",body:"SBI Small Cap Fund: 25% bonus units credited to your folio",time:"2d ago",read:true},
+  ]);
+  const unreadCount=notifications.filter(n=>!n.read).length;
 
-  // Inject CSS
+  // Inject CSS + apply theme
   useEffect(()=>{
     const s=document.createElement("style");s.textContent=GCSS;document.head.appendChild(s);
     return()=>{try{document.head.removeChild(s)}catch{}};
   },[]);
+
+  useEffect(()=>{
+    document.body.className=darkMode?"":"light";
+  },[darkMode]);
 
   // Recompute analytics when holdings or navMap change
   useEffect(()=>{
@@ -2776,25 +3815,44 @@ export default function App(){
   const handleImport=useCallback(data=>{
     const h=data.map(f=>({...f,nav:FUNDS[f.fund]?.nav||100}));
     setHoldings(h);
+    setNotifications(n=>[{icon:"✅",title:"Portfolio Imported",body:`${h.length} funds imported successfully from your CAS statement`,time:"Just now",read:false},...n]);
     setTimeout(()=>setPage("dashboard"),600);
   },[]);
 
-  if(!user) return <AuthPage onLogin={u=>setUser(u)}/>;
+  const handleLogin=useCallback(u=>{
+    setUser(u);
+    setShowOnboarding(true);
+  },[]);
+
+  if(!user) return <AuthPage onLogin={handleLogin}/>;
 
   const grouped=Object.entries(GROUPS).map(([g,label])=>({g,label,pages:PAGES.filter(p=>p.group===g)}));
   const isPro=user.plan==="pro"||user.plan==="elite";
 
   const pageTitles={
-    import:"CAS Statement Import",pipeline:"AMFI NAV Pipeline",dashboard:"Portfolio Dashboard",
-    analytics:"Performance Analytics",screener:"Fund Screener",corpact:"Corporate Actions",
-    montecarlo:"Monte Carlo Simulation",tax:"Tax Optimization Engine",sip:"SIP Goal Planner",
-    ai:"AI Advisor — RAG",security:"Security & Compliance",
-    infra:"Infrastructure & Deployment",monetize:"Monetization",growth:"Growth & Analytics",
+    import:"CAS Statement Import",pipeline:"AMFI NAV Pipeline",onboarding:"Getting Started",
+    dashboard:"Portfolio Dashboard",analytics:"Performance Analytics",benchmark:"Benchmark Comparison",
+    screener:"Fund Screener",compare:"Fund Comparison",watchlist:"Watchlist & Alerts",
+    corpact:"Corporate Actions",montecarlo:"Monte Carlo Simulation",tax:"Tax Optimization Engine",
+    sip:"SIP Goal Planner",rebalance:"Rebalancing Planner",goals:"Goal Tracker",
+    ai:"AI Advisor — RAG",news:"Market News & Insights",quiz:"Risk Profiling Quiz",report:"Portfolio Health Report",
+    security:"Security & Compliance",infra:"Infrastructure & Deployment",
+    monetize:"Monetization",growth:"Growth & Analytics",
   };
 
-  return <div style={{minHeight:"100vh",background:T.bg,color:T.ink,fontFamily:"'Space Grotesk',sans-serif"}}>
+  const bgColor=darkMode?T.bg:"#F4F6FA";
+  const surfaceColor=darkMode?T.surface:"#FFFFFF";
+  const cardColor=darkMode?T.card:"#FFFFFF";
+  const lineColor=darkMode?T.line:"#DDE3EE";
+  const inkColor=darkMode?T.ink:"#1A2540";
+  const muteColor=darkMode?T.muted:"#6B7A99";
+
+  return <div style={{minHeight:"100vh",background:bgColor,color:inkColor,fontFamily:"'Space Grotesk',sans-serif"}}>
+    {showOnboarding&&<OnboardingOverlay user={user} onDone={()=>setShowOnboarding(false)}/>}
+    <NotificationPanel open={showNotif} onClose={()=>setShowNotif(false)} notifications={notifications} onClear={()=>setNotifications(n=>n.map(x=>({...x,read:true})))}/>
+
     {/* NAV Ticker */}
-    <div style={{background:T.surface,borderBottom:`1px solid ${T.line}`,height:24,overflow:"hidden",display:"flex",alignItems:"center"}}>
+    <div style={{background:surfaceColor,borderBottom:`1px solid ${lineColor}`,height:24,overflow:"hidden",display:"flex",alignItems:"center"}}>
       <div style={{background:T.gold,color:"#0B0F17",fontSize:8,fontWeight:700,padding:"0 10px",height:"100%",display:"flex",alignItems:"center",letterSpacing:".1em",flexShrink:0}}>LIVE NAV</div>
       <div style={{overflow:"hidden",flex:1}}>
         <div style={{whiteSpace:"nowrap",animation:"tick 55s linear infinite",display:"inline-block",paddingLeft:16}}>
@@ -2810,43 +3868,52 @@ export default function App(){
     </div>
 
     {/* Header */}
-    <header style={{background:T.surface,borderBottom:`1px solid ${T.line}`,position:"sticky",top:0,zIndex:100}}>
+    <header style={{background:surfaceColor,borderBottom:`1px solid ${lineColor}`,position:"sticky",top:0,zIndex:100}}>
       <div style={{maxWidth:1600,margin:"0 auto",display:"flex",alignItems:"stretch",height:48,padding:"0 16px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:9,marginRight:18,paddingRight:18,borderRight:`1px solid ${T.line}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,marginRight:18,paddingRight:18,borderRight:`1px solid ${lineColor}`}}>
           <div style={{width:28,height:28,background:T.gold+"18",border:`1px solid ${T.gold}30`,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,animation:"glow 4s ease infinite"}}>◈</div>
           <div>
-            <div style={{fontWeight:800,fontSize:13,letterSpacing:"-.03em"}}>MF <span style={{color:T.gold}}>Copilot</span></div>
+            <div style={{fontWeight:800,fontSize:13,letterSpacing:"-.03em",color:inkColor}}>MF <span style={{color:T.gold}}>Copilot</span></div>
           </div>
-          <Badge color={T.teal}>v4.0</Badge>
+          <Badge color={T.teal}>v5.0</Badge>
         </div>
-        <nav style={{display:"flex",gap:0,flex:1,alignItems:"stretch"}}>
+        <nav className="nav-scroll" style={{display:"flex",gap:0,flex:1,alignItems:"stretch"}}>
           {grouped.map(({g,label,pages})=><div key={g} style={{display:"flex",alignItems:"stretch"}}>
-            <div style={{display:"flex",alignItems:"center",padding:"0 8px",borderRight:`1px solid ${T.line}`}}>
-              <span style={{color:T.muted,fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em",whiteSpace:"nowrap"}}>{label}</span>
+            <div style={{display:"flex",alignItems:"center",padding:"0 8px",borderRight:`1px solid ${lineColor}`}}>
+              <span style={{color:muteColor,fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em",whiteSpace:"nowrap"}}>{label}</span>
             </div>
             {pages.map(p=>{
-              const needsPro=["montecarlo","ai"].includes(p.id)&&!isPro;
-              return <button key={p.id} onClick={()=>setPage(p.id)} style={{background:page===p.id?T.gold+"14":"transparent",color:page===p.id?T.gold:T.muted,border:"none",borderBottom:page===p.id?`2px solid ${T.gold}`:"2px solid transparent",borderLeft:"none",borderRight:"none",borderTop:"none",padding:"0 9px",fontSize:10,fontWeight:page===p.id?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontFamily:"inherit",whiteSpace:"nowrap",position:"relative"}}>
+              const needsPro=["montecarlo","ai","report","rebalance"].includes(p.id)&&!isPro;
+              return <button key={p.id} onClick={()=>setPage(p.id)} style={{background:page===p.id?T.gold+"14":"transparent",color:page===p.id?T.gold:muteColor,border:"none",borderBottom:page===p.id?`2px solid ${T.gold}`:"2px solid transparent",borderLeft:"none",borderRight:"none",borderTop:"none",padding:"0 9px",fontSize:10,fontWeight:page===p.id?700:400,cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontFamily:"inherit",whiteSpace:"nowrap",position:"relative"}}>
                 <span style={{fontSize:11}}>{p.icon}</span>{p.label}
                 {needsPro&&<span style={{fontSize:7,color:T.amber,fontWeight:700}}> PRO</span>}
               </button>;
             })}
-            <div style={{borderRight:`1px solid ${T.line}`,margin:"10px 0"}}/>
+            <div style={{borderRight:`1px solid ${lineColor}`,margin:"10px 0"}}/>
           </div>)}
         </nav>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:"auto",paddingLeft:14,borderLeft:`1px solid ${T.line}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:"auto",paddingLeft:14,borderLeft:`1px solid ${lineColor}`}}>
           {an&&<>
             <Mono c={T.gold} s={{fontSize:12,fontWeight:700}}>₹{(an.total/1e5).toFixed(2)}L</Mono>
             <PnlChip v={an.pnlPct}/>
           </>}
-          <div style={{width:1,height:20,background:T.line}}/>
+          <div style={{width:1,height:20,background:lineColor}}/>
+          {/* Theme toggle */}
+          <button onClick={()=>setDarkMode(d=>!d)} title="Toggle theme" style={{background:T.raised,border:`1px solid ${lineColor}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,flexShrink:0}}>
+            {darkMode?"☀️":"🌙"}
+          </button>
+          {/* Notification bell */}
+          <button onClick={()=>{setShowNotif(v=>!v);setNotifications(n=>n.map(x=>({...x,read:true})));}} style={{background:T.raised,border:`1px solid ${lineColor}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative",flexShrink:0}}>
+            <span style={{fontSize:13}}>🔔</span>
+            {unreadCount>0&&<span style={{position:"absolute",top:-3,right:-3,background:T.red,color:"#fff",borderRadius:8,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,padding:"0 3px"}}>{unreadCount}</span>}
+          </button>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <div style={{width:26,height:26,background:`linear-gradient(135deg,${T.gold},${T.teal})`,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"#0B0F17"}}>{user.avatar}</div>
             <div>
-              <div style={{fontSize:11,fontWeight:600,color:T.ink,lineHeight:1}}>{user.name?.split(" ")[0]}</div>
+              <div style={{fontSize:11,fontWeight:600,color:inkColor,lineHeight:1}}>{user.name?.split(" ")[0]}</div>
               <Badge color={user.plan==="pro"?T.gold:T.muted}>{user.plan}</Badge>
             </div>
-            <button onClick={()=>setUser(null)} style={{background:"none",border:`1px solid ${T.line}`,color:T.muted,borderRadius:4,padding:"2px 7px",fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>Sign out</button>
+            <button onClick={()=>setUser(null)} style={{background:"none",border:`1px solid ${lineColor}`,color:muteColor,borderRadius:4,padding:"2px 7px",fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>Sign out</button>
           </div>
         </div>
       </div>
@@ -2854,16 +3921,16 @@ export default function App(){
 
     {/* Page */}
     <main style={{maxWidth:1600,margin:"0 auto",padding:"18px 16px 40px"}}>
-      <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <div>
-          <h1 style={{fontSize:19,fontWeight:800,letterSpacing:"-.03em",margin:0,lineHeight:1.2}}>
+          <h1 style={{fontSize:19,fontWeight:800,letterSpacing:"-.03em",margin:0,lineHeight:1.2,color:inkColor}}>
             <Serif sz={19} italic c={T.gold}>{pageTitles[page]?.split(" ")[0]} </Serif>
             <span>{pageTitles[page]?.split(" ").slice(1).join(" ")}</span>
           </h1>
         </div>
-        {["dashboard","analytics"].includes(page)&&<LiveDot/>}
-        {!isPro&&["montecarlo","ai"].includes(page)&&<Badge color={T.amber}>⭐ Pro Feature</Badge>}
-        {!holdings&&["dashboard","analytics","montecarlo","tax","corpact"].includes(page)&&
+        {["dashboard","analytics","watchlist"].includes(page)&&<LiveDot/>}
+        {!isPro&&["montecarlo","ai","report","rebalance"].includes(page)&&<Badge color={T.amber}>⭐ Pro Feature</Badge>}
+        {!holdings&&["dashboard","analytics","montecarlo","tax","corpact","rebalance","benchmark","report"].includes(page)&&
           <div style={{background:T.amberDim,border:`1px solid ${T.amber}28`,borderRadius:5,padding:"4px 10px",fontSize:11,color:T.amber}}>
             📄 Import your CAS statement first
           </div>}
@@ -2872,14 +3939,26 @@ export default function App(){
       <div className="fu" key={page}>
         {page==="import"    &&<CASParserPage onImport={handleImport}/>}
         {page==="pipeline"  &&<NAVPipelinePage/>}
+        {page==="onboarding"&&<div style={{maxWidth:700,margin:"0 auto"}}><OnboardingOverlay user={user} onDone={()=>setPage("import")} style={{position:"relative",background:"none",zIndex:1}}/></div>}
         {page==="dashboard" &&<DashboardPage an={an} history={history||[]} navMap={navMap}/>}
         {page==="analytics" &&<AnalyticsPage an={an} history={history||[]}/>}
+        {page==="benchmark" &&<BenchmarkPage an={an} history={history||[]}/>}
         {page==="screener"  &&<FundScreenerPage portfolio={holdings||[]}/>}
+        {page==="compare"   &&<ComparePage navMap={navMap}/>}
+        {page==="watchlist" &&<WatchlistPage navMap={navMap}/>}
         {page==="corpact"   &&<CorporateActionsPage/>}
         {page==="montecarlo"&&<MonteCarloPage an={an}/>}
         {page==="tax"       &&<TaxPage an={an}/>}
         {page==="sip"       &&<SIPPlannerPage/>}
+        {page==="rebalance" &&<RebalancePage an={an} holdings={holdings}/>}
+        {page==="goals"     &&<GoalTrackerPage an={an}/>}
         {page==="ai"        &&<AIAdvisorPage an={an}/>}
+        {page==="news"      &&<NewsPage/>}
+        {page==="quiz"      &&<RiskQuizPage an={an} onSuggest={(alloc)=>{
+          const h=Object.entries(alloc).map(([fund,pct])=>({fund,units:Math.round(pct*100/FUNDS[fund]?.nav||100),invested:pct*1000,nav:FUNDS[fund]?.nav||100}));
+          setHoldings(h);setPage("dashboard");
+        }}/>}
+        {page==="report"    &&<HealthReportPage an={an} user={user} holdings={holdings} navMap={navMap}/>}
         {page==="security"  &&<SecurityPage user={user}/>}
         {page==="infra"     &&<InfraPage/>}
         {page==="monetize"  &&<MonetizationPage user={user} onUpgrade={plan=>setUser(u=>({...u,plan}))}/>}
