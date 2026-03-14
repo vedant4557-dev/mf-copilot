@@ -1,0 +1,8 @@
+{
+  "name": "@mf-copilot/ai",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0"
+  }
+}

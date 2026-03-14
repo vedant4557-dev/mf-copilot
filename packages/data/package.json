@@ -1,0 +1,5 @@
+{
+  "name": "@mf-copilot/data",
+  "version": "1.0.0",
+  "main": "src/index.ts"
+}
