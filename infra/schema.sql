@@ -297,3 +297,36 @@ CREATE TRIGGER trg_portfolios_updated BEFORE UPDATE ON portfolios
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_holdings_updated BEFORE UPDATE ON portfolio_holdings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+-- infra/migrations/004_fund_scores_view.sql
+CREATE MATERIALIZED VIEW fund_scores AS
+SELECT
+  f.isin,
+  f.name,
+  f.amc,
+  f.category,
+  f.sub_category,
+  f.expense_ratio,
+  f.aum_cr,
+  f.risk_o_meter,
+  -- Latest NAV
+  (SELECT nav FROM nav_history WHERE fund_isin = f.isin ORDER BY nav_date DESC LIMIT 1) AS latest_nav,
+  -- Return snapshots (precomputed from nav_history)
+  calc_return(f.isin, 365)  AS r1y,
+  calc_return(f.isin, 1095) AS r3y,
+  calc_return(f.isin, 1825) AS r5y,
+  -- Composite score — the expensive calculation done ONCE nightly
+  (
+    COALESCE(calc_return(f.isin, 1095), 0) * 0.4
+    + COALESCE(f.sharpe_ratio, 0) * 20
+    - COALESCE(f.expense_ratio, 1.5) * 10
+    - COALESCE(f.volatility, 20) * 0.3
+  ) AS composite_score
+FROM funds f
+WHERE f.is_active = TRUE;
+
+-- Unique index for CONCURRENTLY refresh (non-blocking)
+CREATE UNIQUE INDEX idx_fund_scores_isin ON fund_scores(isin);
+CREATE INDEX idx_fund_scores_category ON fund_scores(category);
+CREATE INDEX idx_fund_scores_composite ON fund_scores(composite_score DESC);
+CREATE INDEX idx_fund_scores_r3y ON fund_scores(r3y DESC);
+CREATE INDEX idx_fund_scores_er ON fund_scores(expense_ratio ASC);
