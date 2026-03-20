@@ -172,3 +172,19 @@ router.get(
 );
 
 export default router;
+// apps/api/src/routes/ai.ts — replace the handler body
+router.post('/chat', requireAuth, validate(ChatSchema), async (req, res) => {
+  const { message, portfolioId, mode } = req.body;
+
+  let hash = 'anon';
+  if (portfolioId && mode !== 'chat') {
+    const holdings = await getHoldings(portfolioId);            // cheap DB read
+    hash = portfolioHash(holdings, mode);
+  }
+
+  const { result, fromCache } = await cachedAI(hash, mode, () =>
+    callClaude(buildPrompt(mode, message, portfolioCtx))
+  );
+
+  res.json({ ...result, fromCache, cacheKey: `ai:${mode}:${hash}` });
+});
