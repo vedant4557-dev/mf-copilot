@@ -264,3 +264,30 @@ router.get(
 );
 
 export default router;
+// apps/api/src/routes/portfolio.ts — analytics endpoint becomes a DB read only
+router.get('/:id/analytics', requireAuth, async (req, res) => {
+  const { id } = req.params;
+
+  // Fast path: return stored result (3ms DB read)
+  const stored = await prisma.analyticsResults.findFirst({
+    where: { portfolioId: id },
+    orderBy: { computedAt: 'desc' },
+  });
+
+  if (stored) {
+    return res.json({ ...stored, stale: false, computedAt: stored.computedAt });
+  }
+
+  // Cold path only on first-ever load — trigger compute and return 202
+  await analyticsQueue.add('recompute', { portfolioId: id }, { priority: 1 });
+  res.status(202).json({ status: 'computing', message: 'Check back in 3s' });
+});
+// apps/api/src/routes/portfolio.ts — trigger worker on any mutation
+// Add this to ALL portfolio mutation handlers (import, transaction add, etc.)
+async function triggerAnalyticsRecompute(portfolioId: string, priority = 2) {
+  await analyticsQueue.add('recompute', { portfolioId }, {
+    priority,
+    jobId: `analytics:${portfolioId}`,  // deduplication — only one job per portfolio
+    removeOnComplete: true,
+  });
+}
