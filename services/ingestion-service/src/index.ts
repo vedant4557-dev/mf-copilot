@@ -242,3 +242,6 @@ async function broadcastNAVUpdate(updatedIsins: string[]) {
     navDate: new Date().toISOString(),
   }));
 }
+// services/ingestion-service/src/index.ts — after NAV upsert
+await prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY fund_scores`;
+// Non-blocking: runs in background, old data still served during refresh
