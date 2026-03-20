@@ -234,3 +234,11 @@ process.on("SIGTERM", async () => {
   redis.disconnect();
   process.exit(0);
 });
+// services/ingestion-service/src/index.ts — after NAV upsert completes
+async function broadcastNAVUpdate(updatedIsins: string[]) {
+  // Publish with the exact ISINs that changed — don't wake up everyone
+  await redis.publish('nav.refreshed', JSON.stringify({
+    isins: updatedIsins,
+    navDate: new Date().toISOString(),
+  }));
+}
