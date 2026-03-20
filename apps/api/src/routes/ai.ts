@@ -188,3 +188,48 @@ router.post('/chat', requireAuth, validate(ChatSchema), async (req, res) => {
 
   res.json({ ...result, fromCache, cacheKey: `ai:${mode}:${hash}` });
 });
+// apps/api/src/routes/ai.ts — add streaming endpoint
+router.post('/chat/stream', requireAuth, validate(ChatSchema), async (req, res) => {
+  // Check cache first — if hit, stream the cached response (instant)
+  const { portfolioId, mode, message } = req.body;
+  const hash = portfolioId ? portfolioHash(await getHoldings(portfolioId), mode) : 'anon';
+  const cacheKey = `ai:${mode}:${hash}`;
+  const cached = await redis.get(cacheKey);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  if (cached) {
+    // Stream cached response word by word for natural feel
+    const words = JSON.parse(cached).text.split(' ');
+    for (const word of words) {
+      res.write(`data: ${JSON.stringify({ delta: word + ' ' })}\n\n`);
+      await new Promise(r => setTimeout(r, 20)); // 20ms per word ≈ reading speed
+    }
+    res.write(`data: ${JSON.stringify({ done: true, fromCache: true })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Live stream from Claude
+  const { model, maxTokens } = MODEL_ROUTING[mode];
+  const stream = await anthropic.messages.stream({
+    model, max_tokens: maxTokens,
+    system: buildSystemPrompt(portfolioCtx, ragDocs),
+    messages: [{ role: 'user', content: message }],
+  });
+
+  let fullText = '';
+  stream.on('text', (delta) => {
+    fullText += delta;
+    res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+  });
+
+  stream.on('finalMessage', async () => {
+    // Cache the full response for next time
+    if (TTL[mode] > 0) await redis.setex(cacheKey, TTL[mode], JSON.stringify({ text: fullText }));
+    res.write(`data: ${JSON.stringify({ done: true, fromCache: false })}\n\n`);
+    res.end();
+  });
+});
