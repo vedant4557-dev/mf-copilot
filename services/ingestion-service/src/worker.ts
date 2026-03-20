@@ -61,3 +61,46 @@ new Worker('alerts', async (job) => {
     }));
   }
 }, { connection: redisConn, concurrency: 50 });
+// services/analytics-engine/src/worker.ts
+import { Worker, Queue } from 'bullmq';
+import { computeAnalytics } from '@mf-copilot/analytics';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+const redis = { host: process.env.REDIS_HOST!, port: 6379 };
+
+// This worker is the ONLY place analytics is computed
+new Worker('analytics', async (job) => {
+  const { portfolioId } = job.data;
+
+  const [holdings, latestNavs] = await Promise.all([
+    prisma.portfolioHoldings.findMany({
+      where: { portfolioId },
+      include: { portfolioTransactions: { orderBy: { txnDate: 'asc' } } }
+    }),
+    prisma.navHistory.findMany({
+      where: { fundIsin: { in: holdings.map(h => h.fundIsin) } },
+      orderBy: { navDate: 'desc' },
+      distinct: ['fundIsin'],
+    })
+  ]);
+
+  const navMap = Object.fromEntries(latestNavs.map(n => [n.fundIsin, Number(n.nav)]));
+  const result = computeAnalytics(holdings, navMap);   // the heavy computation
+
+  // Upsert — replace previous result for this portfolio
+  await prisma.analyticsResults.upsert({
+    where: { portfolioId_computedAt: { portfolioId, computedAt: new Date() } },
+    create: { portfolioId, ...result, computedAt: new Date() },
+    update: { ...result, computedAt: new Date() },
+  });
+
+  // Invalidate AI cache for this portfolio (analytics changed)
+  const holdings2 = await prisma.portfolioHoldings.findMany({ where: { portfolioId } });
+  const hash = portfolioHash(holdings2.map(h => ({ fundIsin: h.fundIsin, units: Number(h.units), avgBuyNav: Number(h.avgBuyNav) })), '*');
+  await redis.del(`ai:*:${hash}`); // pattern delete via SCAN in production
+
+  // Notify frontend
+  await pubClient.publish('analytics.ready', JSON.stringify({ portfolioId }));
+
+}, { connection: redis, concurrency: 8 });
