@@ -4515,3 +4515,44 @@ export default function App(){
     </main>
   </div>;
 }
+// apps/web/src/App.jsx — replace static page components with lazy imports
+import { lazy, Suspense } from 'react';
+
+// Eager: Auth + Dashboard (must load immediately)
+import AuthPage from './pages/Auth';
+import DashboardPage from './pages/Dashboard';
+
+// Lazy: everything else
+const MonteCarloPage  = lazy(() => import('./pages/MonteCarlo'));
+const AIAdvisorPage   = lazy(() => import('./pages/AIAdvisor'));
+const TaxPage         = lazy(() => import('./pages/Tax'));
+const InfraPage       = lazy(() => import('./pages/Infra'));
+const BenchmarkPage   = lazy(() => import('./pages/Benchmark'));
+const HealthReportPage = lazy(() => import('./pages/HealthReport'));
+
+// Skeleton component — same layout as actual page, gray placeholders
+function PageSkeleton() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      {[...Array(4)].map((_, i) => (
+        <div key={i} style={{
+          background: 'var(--color-background-secondary)',
+          borderRadius: 8, height: 120,
+          animation: 'pulse 1.5s ease-in-out infinite'
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// In render:
+{page === 'montecarlo' && (
+  <Suspense fallback={<PageSkeleton />}>
+    <MonteCarloPage an={an} />
+  </Suspense>
+)}
+/* Add to GCSS */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
