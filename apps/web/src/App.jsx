@@ -385,7 +385,7 @@ async function callRAGAI(query, portfolioCtx, history=""){
   const ragCtx=docs.map(d=>`[${d.type.toUpperCase()} — ${d.src}]\n${d.title}: ${d.content}`).join("\n\n");
   const sysPrompt=`You are an expert Indian mutual fund analyst and SEBI-compliant AI advisor. Provide specific, data-driven insights grounded in the retrieved documents and portfolio data. Be precise (use ₹, %, actual fund names). Max 200 words. End with one concrete action item.\n\nRetrieved Knowledge:\n${ragCtx}\n\n${portfolioCtx}\n\nConversation history:\n${history}`;
 
-  const res=await fetch("https://api.anthropic.com/v1/messages",{
+  const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${AIzaSyDE65-IYJPkDd2g7I3dYvwT6UqjBhej0j4}",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,
@@ -3033,7 +3033,7 @@ function NewsPage(){
   const fetchAIInsights=async()=>{
     setLoading(true);
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${AIzaSyDE65-IYJPkDd2g7I3dYvwT6UqjBhej0j4}",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,
           messages:[{role:"user",content:`Generate 3 current Indian mutual fund market insights in JSON array format. Each object: {id, cat (market/mf/sebi/tax), headline, summary (2 sentences), time, src, tag, tagC (hex color)}. Focus on: sector rotation, SIP trends, regulatory changes. Return only valid JSON array.`}]})});
       const data=await res.json();
@@ -3141,7 +3141,7 @@ function RiskQuizPage({an,onSuggest}){
   const getAIInsight=async(profile,score)=>{
     setAiLoading(true);
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${AIzaSyDE65-IYJPkDd2g7I3dYvwT6UqjBhej0j4}",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,
           messages:[{role:"user",content:`Indian investor risk profile: ${profile.name} (score ${score}/21). In 3 sentences, explain why this profile fits, key risks to watch, and one pro tip for this investor type. Be specific to Indian MF market.`}]})});
       const data=await res.json();
