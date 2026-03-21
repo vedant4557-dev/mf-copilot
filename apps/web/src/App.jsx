@@ -5,30 +5,24 @@
 // ╚══════════════════════════════════════════════════════════════╝
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
-let _geminiInFlight = false;
-async function callGemini(payload, retries = 3) {
-  if (_geminiInFlight) {
-    // Queue — wait up to 3s for the current call to finish
-    await new Promise(r => setTimeout(r, 1500));
-  }
-  _geminiInFlight = true;
-  try {
-    for (let i = 0; i < retries; i++) {
-      const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.status === 429) {
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); // 1s, 2s, 4s
-        continue;
-      }
-      return res.json();
+// Promise queue — serialises all Gemini calls so they never fire in parallel
+let _geminiQueue = Promise.resolve();
+function callGemini(payload, retries=3){
+  const attempt=()=>new Promise(async(resolve,reject)=>{
+    for(let i=0;i<retries;i++){
+      try{
+        const res=await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`,{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(payload)
+        });
+        if(res.status===429){await new Promise(r=>setTimeout(r,1000*Math.pow(2,i)));continue;}
+        return resolve(await res.json());
+      }catch(e){if(i===retries-1)reject(e);}
     }
-    throw new Error('Gemini rate limit — try again in a moment');
-  } finally {
-    _geminiInFlight = false;
-  }
+    reject(new Error("Gemini rate limit — try again in a moment"));
+  });
+  _geminiQueue=_geminiQueue.then(attempt,attempt);
+  return _geminiQueue;
 }
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
