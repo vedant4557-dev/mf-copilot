@@ -3562,7 +3562,7 @@ function HealthReportPage({an,user,holdings}){
   const generateReport=async()=>{
     setGenerating(true);
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${AIzaSyDE65-IYJPkDd2g7I3dYvwT6UqjBhej0j4}",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,
           messages:[{role:"user",content:`Write a 4-sentence executive summary for an Indian mutual fund portfolio health report. Portfolio: ${holdings.length} funds, total value ₹${(an.total/1e5).toFixed(1)}L, XIRR ${an.xirr?.toFixed(1)||18}%, health score ${score}/100, grade ${grade}. Cover: overall assessment, key strength, main risk, one action recommendation. Be specific and professional.`}]})});
       const data=await res.json();
