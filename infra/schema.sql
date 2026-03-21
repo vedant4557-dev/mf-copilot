@@ -330,3 +330,58 @@ CREATE INDEX idx_fund_scores_category ON fund_scores(category);
 CREATE INDEX idx_fund_scores_composite ON fund_scores(composite_score DESC);
 CREATE INDEX idx_fund_scores_r3y ON fund_scores(r3y DESC);
 CREATE INDEX idx_fund_scores_er ON fund_scores(expense_ratio ASC);
+-- Memory schema — 4 tables
+
+CREATE TABLE user_memory (
+  user_id           UUID PRIMARY KEY REFERENCES users(id),
+  risk_inferred     TEXT NOT NULL DEFAULT 'moderate',
+  behavior_score    INTEGER NOT NULL DEFAULT 50,  -- 0 (passive) to 100 (active)
+  avg_hold_months   NUMERIC(6,2),                 -- derived from transaction history
+  preferred_cats    TEXT[],                        -- ['Large Cap','Index','Flexi Cap']
+  avoided_cats      TEXT[],                        -- funds they keep dismissing
+  ltcg_sensitivity  INTEGER DEFAULT 50,           -- 0=doesn't care, 100=very tax-aware
+  goal_count        INTEGER DEFAULT 0,
+  last_action_at    TIMESTAMPTZ,
+  cas_import_count  INTEGER DEFAULT 0,
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE recommendation_history (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id          UUID NOT NULL REFERENCES users(id),
+  portfolio_id     UUID NOT NULL REFERENCES portfolios(id),
+  issue_type       TEXT NOT NULL,
+  action_verb      TEXT NOT NULL,
+  fund_from        TEXT,
+  fund_to          TEXT,
+  amount_inr       NUMERIC(15,2),
+  score            INTEGER NOT NULL,
+  shown_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  outcome          TEXT CHECK (outcome IN ('followed','dismissed','deferred','expired')),
+  outcome_at       TIMESTAMPTZ,
+  portfolio_impact NUMERIC(8,4)                  -- XIRR delta 90 days after
+);
+
+CREATE TABLE recommendation_outcomes (
+  recommendation_id UUID PRIMARY KEY REFERENCES recommendation_history(id),
+  followed          BOOLEAN NOT NULL,
+  followed_at       TIMESTAMPTZ,
+  xirr_before       NUMERIC(8,4),
+  xirr_after_90d    NUMERIC(8,4),
+  xirr_delta        NUMERIC(8,4) GENERATED ALWAYS AS (xirr_after_90d - xirr_before) STORED
+);
+
+CREATE TABLE user_interactions (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      UUID NOT NULL REFERENCES users(id),
+  session_id   TEXT,
+  event        TEXT NOT NULL,                     -- 'viewed_decision','clicked_action','expanded_reason'
+  entity_type  TEXT,                              -- 'fund', 'decision', 'goal'
+  entity_id    TEXT,
+  context      JSONB,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_rec_history_user    ON recommendation_history(user_id, shown_at DESC);
+CREATE INDEX idx_rec_history_outcome ON recommendation_history(outcome, issue_type);
+CREATE INDEX idx_interactions_user   ON user_interactions(user_id, created_at DESC);
