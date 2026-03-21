@@ -3,6 +3,7 @@
 // ║  Watchlist · Compare · News · Quiz · Rebalance · Goals      ║
 // ║  Benchmark · Health Report · Onboarding · Dark/Light · PWA  ║
 // ╚══════════════════════════════════════════════════════════════╝
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
