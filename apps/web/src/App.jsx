@@ -4,6 +4,32 @@
 // ║  Benchmark · Health Report · Onboarding · Dark/Light · PWA  ║
 // ╚══════════════════════════════════════════════════════════════╝
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+let _geminiInFlight = false;
+async function callGemini(payload, retries = 3) {
+  if (_geminiInFlight) {
+    // Queue — wait up to 3s for the current call to finish
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  _geminiInFlight = true;
+  try {
+    for (let i = 0; i < retries; i++) {
+      const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.status === 429) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); // 1s, 2s, 4s
+        continue;
+      }
+      return res.json();
+    }
+    throw new Error('Gemini rate limit — try again in a moment');
+  } finally {
+    _geminiInFlight = false;
+  }
+}
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
@@ -386,12 +412,7 @@ async function callRAGAI(query, portfolioCtx, history=""){
   const ragCtx=docs.map(d=>`[${d.type.toUpperCase()} — ${d.src}]\n${d.title}: ${d.content}`).join("\n\n");
   const sysPrompt=`You are an expert Indian mutual fund analyst and SEBI-compliant AI advisor. Provide specific, data-driven insights grounded in the retrieved documents and portfolio data. Be precise (use ₹, %, actual fund names). Max 200 words. End with one concrete action item.\n\nRetrieved Knowledge:\n${ragCtx}\n\n${portfolioCtx}\n\nConversation history:\n${history}`;
 
-  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({contents:[{parts:[{text:sysPrompt+"\n\nQuestion: "+query}]}],generationConfig:{maxOutputTokens:800,temperature:0.7}})
-  });
-  const data=await res.json();
+  const data=await callGemini({contents:[{parts:[{text:sysPrompt+"\n\nQuestion: "+query}]}],generationConfig:{maxOutputTokens:800,temperature:0.7}});
   const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"Failed to get AI response.";
   const result={text,sources:docs};
   CACHE.set(ck,{v:result,ts:Date.now(),ttl:1800000,hits:0,t:"ai"});
@@ -3033,9 +3054,7 @@ function NewsPage(){
   const fetchAIInsights=async()=>{
     setLoading(true);
     try{
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({contents:[{parts:[{text:`Generate 3 current Indian mutual fund market insights in JSON array format. Each object: {id, cat (market/mf/sebi/tax), headline, summary (2 sentences), time, src, tag, tagC (hex color)}. Focus on: sector rotation, SIP trends, regulatory changes. Return only valid JSON array.`}]}],generationConfig:{maxOutputTokens:800,temperature:0.7}})});
-      const data=await res.json();
+      const data=await callGemini({contents:[{parts:[{text:`Generate 3 current Indian mutual fund market insights in JSON array format. Each object: {id, cat (market/mf/sebi/tax), headline, summary (2 sentences), time, src, tag, tagC (hex color)}. Focus on: sector rotation, SIP trends, regulatory changes. Return only valid JSON array.`}]}],generationConfig:{maxOutputTokens:800,temperature:0.7}});
       const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"[]";
       const clean=text.replace(/```json|```/g,"").trim();
       const fresh=JSON.parse(clean);
@@ -3140,9 +3159,7 @@ function RiskQuizPage({an,onSuggest}){
   const getAIInsight=async(profile,score)=>{
     setAiLoading(true);
     try{
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({contents:[{parts:[{text:`Indian investor risk profile: ${profile.name} (score ${score}/21). In 3 sentences, explain why this profile fits, key risks to watch, and one pro tip for this investor type. Be specific to Indian MF market.`}]}],generationConfig:{maxOutputTokens:300,temperature:0.7}})});
-      const data=await res.json();
+      const data=await callGemini({contents:[{parts:[{text:`Indian investor risk profile: ${profile.name} (score ${score}/21). In 3 sentences, explain why this profile fits, key risks to watch, and one pro tip for this investor type. Be specific to Indian MF market.`}]}],generationConfig:{maxOutputTokens:300,temperature:0.7}});
       setAiInsight(data.candidates?.[0]?.content?.parts?.[0]?.text||"");
     }catch{}
     setAiLoading(false);
@@ -3560,9 +3577,7 @@ function HealthReportPage({an,user,holdings}){
   const generateReport=async()=>{
     setGenerating(true);
     try{
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({contents:[{parts:[{text:`Write a 4-sentence executive summary for an Indian mutual fund portfolio health report. Portfolio: ${holdings.length} funds, total value ₹${(an.total/1e5).toFixed(1)}L, XIRR ${an.xirr?.toFixed(1)||18}%, health score ${score}/100, grade ${grade}. Cover: overall assessment, key strength, main risk, one action recommendation. Be specific and professional.`}]}],generationConfig:{maxOutputTokens:500,temperature:0.7}})});
-      const data=await res.json();
+      const data=await callGemini({contents:[{parts:[{text:`Write a 4-sentence executive summary for an Indian mutual fund portfolio health report. Portfolio: ${holdings.length} funds, total value ₹${(an.total/1e5).toFixed(1)}L, XIRR ${an.xirr?.toFixed(1)||18}%, health score ${score}/100, grade ${grade}. Cover: overall assessment, key strength, main risk, one action recommendation. Be specific and professional.`}]}],generationConfig:{maxOutputTokens:500,temperature:0.7}});
       setAiSummary(data.candidates?.[0]?.content?.parts?.[0]?.text||"");
     }catch{}
     setGenerating(false);
